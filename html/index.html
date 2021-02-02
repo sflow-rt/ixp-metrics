@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="icon" type="image/png" href="../../../inc/img/favicon.png">
+    <link rel="stylesheet" href="../../../inc/bootstrap.min.css">
+    <link rel="stylesheet" href="../../../inc/stripchart.css">
+    <link rel="stylesheet" href="css/app.css">
+    <script type="text/javascript" src="../../../inc/jquery.min.js"></script>
+    <script type="text/javascript" src="../../../inc/jquery.widget.js"></script>
+    <script type="text/javascript" src="../../../inc/jquery.stripchart.js"></script>
+    <script type="text/javascript" src="../../../inc/stripchart.js"></script>
+    <script type="text/javascript" src="../../../inc/popper.min.js"></script>
+    <script type="text/javascript" src="../../../inc/bootstrap.min.js"></script>
+    <script type="text/javascript" src="js/app.js"></script>
+    <title>IXP Metrics</title>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-sm navbar-dark mb-3" style="background-color: #336;">
+      <a class="navbar-brand" href="#">
+        <img src="../../../inc/img/inmon.svg" height="30" class="d-inline-block align-top">
+        IXP Metrics
+      </a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav">
+          <li class="nav-item" data-toggle="collapse" data-target=".navbar-collapse.show">
+            <a class="nav-link" href="#" data-target="traffic">Traffic</a>
+          </li>
+          <li class="nav-item" data-toggle="collapse" data-target=".navbar-collapse.show">
+            <a class="nav-link" href="#" data-target="settings">Settings</a>
+          </li>
+          <li class="nav-item" data-toggle="collapse" data-target=".navbar-collapse.show">
+            <a class="nav-link" href="#" data-target="help">Help</a>
+          </li>
+        </ul>
+      </div>
+    </nav>
+    <main class="container" role="main">
+      <section id="traffic">
+        <div class="row">
+          <div class="col-lg-6">
+            <div class="card mb-3">
+              <h5 class="card-header">Protocols</h5>
+              <div class="card-body">
+                <div id="topprotos" class="trend"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="card mb-3">
+              <h5 class="card-header">Member Sources</h5>
+              <div class="card-body">
+                <div id="topsources" class="trend"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-lg-6">
+            <div class="card mb-3">
+              <h5 class="card-header">Member Destinations</h5>
+              <div class="card-body">
+                <div id="topdestinations" class="trend"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="card mb-3">
+              <h5 class="card-header">Member Pairs</h5>
+              <div class="card-body">
+                <div id="toppairs" class="trend"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-lg-6">
+            <div class="card mb-3">
+              <h5 class="card-header">Unknown Sources</h5>
+              <div class="card-body">
+                <div id="topunknownsrc" class="trend"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="card mb-3">
+              <h5 class="card-header">Unknown Destinations</h5>
+              <div class="card-body">
+                <div id="topunknowndst" class="trend"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-lg-6">
+            <div class="card mb-3">
+              <h5 class="card-header">Packet Sizes</h5>
+              <div class="card-body">
+                <div id="pktsizes" class="trend"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <div class="card mb-3">
+              <h5 class="card-header">BGP</h5>
+              <div class="card-body">
+                <div id="bgp" class="trend"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section id="settings">
+        <div class="custom-file mb-3">
+          <input type="file" class="custom-file-input" id="membersFile" accept="application/json">
+          <label class="custom-file-label" for="topologyFile">Choose members file</label>
+          <div class="invalid-feedback">Bad members file</div>
+          <div class="valid-feedback">Members loaded</div> 
+        </div>
+        <p>Use above form to upload members file.</p>
+        <p>Alternatively, post members using REST API.</p>
+        <pre class="bg-light"><code>curl -X PUT -H &quot;Content-Type: application/json&quot; -d @members.json \
+http://localhost:8008/app/ixp-metrics/scripts/metrics.js/members/json</code></pre>
+        <p>For example, the above command uses curl to post a members file.</p>
+      </section>
+      <section id="help">
+        <p><em>IXP Metrics</em> provides real-time monitoring of traffic in a layer 2 Internet exchange.
+        The application relies on standard sFlow instrumentation in the switches to provide measurements.</p>
+        <h4>Topology</h4>
+        <p><a href="https://sflow-rt.com/topology.php">Topology</a> is required. Install the
+        <a href="https://github.com/sflow-rt/topology">topology application</a> to persist the topology setting
+        and verify that all links are being monitored.</p>
+        <h4>Members</h4>
+        <p>The <a href="https://github.com/euro-ix/json-schemas/">IX-F Member Export JSON Schema V1.0</a> is used
+        to identify exchange members and their assigned MAC addresses.</p>
+        <p>Members information can be manually posted via the <em>Settings</em> tab in the web interface.</p>
+        <p><b>Note:</b> The <i>Traffic&gt;Unknown</i> charts show traffic from MAC addresses entering or leaving
+        the IXP fabric that haven't been assigned to members. Events are generated as well, identifying the member
+        associated with the unknown MAC address if it originated from their IP address.</p> 
+        <h4>Monitoring Traffic</h4>
+        <p>The following charts under the <em>Traffic</em> tab display key metrics:</p>
+        <ul>
+          <li><strong>Protocols</strong> Top protocols by Ethernet packet type.</li>
+          <li><strong>Member Sources</strong> Top members generating traffic.</li>
+          <li><strong>Member Destinations</strong> Top members receiving traffic.</li>
+          <li><strong>Member Pairs</strong> Top member to member flows.</li>
+          <li><strong>Unknown Sources</strong> Top source MAC addresses that cannot be mapped to members.</li>
+          <li><strong>Unknown Destinations</strong> Top destination MAC addresses that cannot be mapped to members.</li>
+          <li><strong>Packet Sizes</strong> Packet size distribution.</li>
+          <li><strong>BGP</strong> Number of member to member BGP connections.</li>
+        </ul>
+        <p><strong>Note</strong> Click on peaks in the charts to see values at that time.</p>
+        <h4>REST API</h4>
+        <p>The IX Metrics user interface is built on a set of REST API calls that can be used to configure the software and retrieve data.</p>
+        <table class="table table-striped table-bordered table-sm table-responsive-md">
+          <thead class="thead-light"><tr><th>URL</th><th>Operations</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><a href="../scripts/metrics.js/members/json">scripts/metrics.js/members/json</a></td><td>GET, PUT, POST</td><td>Manage members</td></tr>
+            <tr><td><a href="../scripts/metrics.js/metric/json">scripts/metrics.js/metric/json</a></td><td>GET</td><td>Latest metric values</td></tr>
+            <tr><td>scripts/metrics.js/metric/{name}/json</td><td>GET</td><td>Latest value of named metric</td></tr>
+            <tr><td><a href="../scripts/metrics.js/matrix/json">scripts/metrics.js/matrix/json</a></td><td>GET</td><td>Inter-member traffic matrix</td></tr>
+            <tr><td><a href="../scripts/metrics.js/bgp/json">scripts/metrics.js/bgp/json</a></td><td>GET</td><td>BGP peering connections</td></tr>
+            <tr><td><a href="../scripts/metrics.js/prometheus/txt">scripts/metrics.js/prometheus/txt</a></td><td>GET</td><td>Prometheus format metrics</td></tr>
+          </tbody>
+        </table>
+        <h4>Startup Settings</h4>
+        <p>See <a href="https://sflow-rt.com/reference.php#properties">System Properties</a> for information on configuring startup settings.</p>
+        <div class="table-responsive-xl">
+          <table class="table table-striped table-bordered table-sm">
+            <thead class="thead-light"><tr><th>Property</th><th>Default</th><th>Description</th></tr><thead>
+            <tbody>
+              <tr><td>ixp.flow.t</td><td>15</td><td>Flow smoothing (in seconds)</td></tr>
+              <tr><td>ixp.flow.n</td><td>10</td><td>Number of large flows per data source</td></tr>
+              <tr><td>ixp.members.n</td><td>1000</td><td>Maximum rows in member matrix</td></tr>
+              <tr><td>ixp.syslog.host</td><td></td><td>Syslog collector address</td></tr>
+              <tr><td>ixp.syslog.port</td><td>514</td><td>Syslog UDP port</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <footer class="footer page-footer border-top mt-3">
+       <div class="footer-copyright text-center py-2">
+         <small class="text-muted">Copyright &copy; 2021 InMon Corp. ALL RIGHTS RESERVED</small>
+       </div>
+    </footer>
+  </body>
+</html>
