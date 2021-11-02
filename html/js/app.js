@@ -5,19 +5,23 @@ $(function() {
   var SEP = '_SEP_';
 
   function setNav(target) {
-    $('.navbar .nav-item a[data-target="'+target+'"]').parent().addClass('active').siblings().removeClass('active');
-    $('#'+target).show().siblings().hide();
+    $('.navbar .nav-item a[href="'+target+'"]').parent().addClass('active').siblings().removeClass('active');
+    $(target).show().siblings().hide();
+    window.sessionStorage.setItem('ixp_metrics_nav',target);
+    window.history.replaceState(null,'',target);
   }
 
-  setNav(window.sessionStorage.getItem('fm_nav') || 'traffic');
+  var hash = window.location.hash;
+  if(hash && $('.navbar .nav-item a[href="'+hash+'"]').length == 1) setNav(hash);
+  else setNav(window.sessionStorage.getItem('ixp_metrics_nav') || $('.navbar .nav-item a').first().attr('href'));
 
   $('.navbar .nav-link').on('click', function(e) {
-    var selected = $(this).data('target');
+    var selected = $(this).attr('href');
     setNav(selected);
-    window.sessionStorage.setItem('fm_nav',selected);
+    if('#traffic' === selected) $.event.trigger({type:'updateChart'});
   });
 
-  $('a[href="#"]').on('click', function(e) {
+  $('a[href^="#"]').on('click', function(e) {
     e.preventDefault();
   });
 
