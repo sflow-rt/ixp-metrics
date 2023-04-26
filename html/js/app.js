@@ -37,7 +37,7 @@ $(function() {
     includeOther: false,
     sep: SEP,
     metric: 'top-5-memsrc',
-    legendHeadings: ['Src Member'],
+    legendHeadings: ['ASN','Name'],
     units: 'Bits per Second'},
   db);
   $('#topdestinations').chart({
@@ -46,7 +46,7 @@ $(function() {
     includeOther: false,
     sep: SEP,
     metric: 'top-5-memdst',
-    legendHeadings: ['Dst Member'],
+    legendHeadings: ['ASN','Name'],
     units: 'Bits per Second'},
   db);
   $('#toppairs').chart({
@@ -55,7 +55,7 @@ $(function() {
     includeOther: false,
     sep: SEP,
     metric: 'top-5-mempair',
-    legendHeadings: ['Src Member','Dst Member'],
+    legendHeadings: ['ASN','Name','ASN','Name'],
     units: 'Bits per Second'},
   db); 
   $('#topprotos').chart({

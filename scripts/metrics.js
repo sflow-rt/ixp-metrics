@@ -1,13 +1,13 @@
 // author: InMon Corp.
-// version: 1.0
-// date: 1/27/2021
+// version: 1.1
+// date: 4/25/2023
 // description: Internet Exchange Provider (IXP) Metrics
-// copyright: Copyright (c) 2021 InMon Corp. ALL RIGHTS RESERVED
+// copyright: Copyright (c) 2021-2023 InMon Corp. ALL RIGHTS RESERVED
 
 include(scriptdir() + '/inc/trend.js');
 
 var T = getSystemProperty('ixp.flow.t') || 15;
-var N = getSystemProperty('ixp.flow.n') || 10;
+var N = getSystemProperty('ixp.flow.n') || 20;
 var SEP = '_SEP_';
 
 var syslogHost = getSystemProperty("ixp.syslog.host");
@@ -30,7 +30,7 @@ var members = storeGet('members') || {};
 var macToMember = {};
 var ipGroups = {};
 function updateMemberInfo() {
-  var memberToMac,memberToIP,member,name,macs,ips,conns,j,conn,vlan_list,k,vlan,mac;
+  var memberToMac,memberToIP,member,name,asn,rec,macs,ips,conns,j,conn,vlan_list,k,vlan,mac;
 
   memberToMac = {};
   memberToIP = {};
@@ -41,8 +41,11 @@ function updateMemberInfo() {
   for(i = 0; i < members.member_list.length; i++) {
     member = members.member_list[i];
     if(!member) continue;
+    asn = member.asnum;
+    if(!asn) continue;
     name = member.name;
     if(!name) continue;
+    rec = asn.toString() + SEP + name;
     macs = [];
     ips = [];
     conns = member.connection_list;
@@ -65,12 +68,12 @@ function updateMemberInfo() {
         macs = macs.filter((mac,idx,arr) => arr.indexOf(mac) === idx && 'UNKNOWN' !== mac).map(mac => mac.replace(/:/g,'').toUpperCase());
         for(var m = 0; m < macs.length; m++) {
           let mac = macs[m];
-          macToMember[mac] = name;
+          macToMember[mac] = rec;
         }
       }
     }
-    if(ips.length > 0) memberToIP[name] = ips;
-    if(macs.length > 0) memberToMac[name] = macs;
+    if(ips.length > 0) memberToIP[rec] = ips;
+    if(macs.length > 0) memberToMac[rec] = macs;
   }
   setGroups('ixp_member',memberToIP);
   setMap('ixp_member',memberToMac);
@@ -209,14 +212,15 @@ setFlowHandler(function(flow) {
   switch(flow.name) {
   case 'ixp_ip4':
   case 'ixp_ip6':
-    let [mmac,member] = flow.flowKeys.split(SEP);
+    let [mmac,asn,name] = flow.flowKeys.split(SEP);
     let macMem = macToMember[mmac];
     if(macMem) {
-      if(member !== macMem) {
-        sendWarning({ixp_evt:"assignment", mac:mmac, assigned:macMem, seen:member});
+      let [mac_asn,mac_name] = macMem.split(SEP);
+      if(asn !== mac_asn) {
+        sendWarning({ixp_evt:"assignment", mac:mmac, assigned:mac_asn, seen:asn});
       }
     } else {
-      sendWarning({ixp_evt:"missing", mac:mmac, member:member});
+      sendWarning({ixp_evt:"missing", mac:mmac, member:asn});
     } 
     break;
   case 'ixp_badprotocol':
@@ -224,8 +228,8 @@ setFlowHandler(function(flow) {
     sendWarning({ixp_evt:"protocol", "mac":smac, "ethtype":ethtype});
     break;
   case 'ixp_bgp':
-    let [mem1,mem2] = flow.flowKeys.split(SEP);
-    let bgpkey = mem1 > mem2 ? mem2+SEP+mem1 : mem1+SEP+mem2;
+    let [asn1,name1,asn2,name2] = flow.flowKeys.split(SEP);
+    let bgpkey = asn1 > asn2 ? asn2+SEP+asn1 : asn1+SEP+asn2;
     bgp[bgpkey] = flow.start;
     break;
   }
@@ -260,10 +264,10 @@ function prometheus() {
   // Member traffic matrix
   var rows = activeFlows('TOPOLOGY','ixp_pair',max_members,0,'edge') || [];
   for(var i = 0; i < rows.length; i++) {
-    let [src,dst] = rows[i].key.split(SEP);
-    src = prometheusName(src);
-    dst = prometheusName(dst);
-    result += prometheus_prefix+'peering_bps{src="'+src+'",dst="'+dst+'"} '+(rows[i].value*8)+'\n';
+    let [src_asn,src_name,dst_asn,dst_name] = rows[i].key.split(SEP);
+    src_name = prometheusName(src_name);
+    dst_name = prometheusName(dst_name);
+    result += prometheus_prefix+'peering_bps{src_asn="'+src_asn+'",src_name="'+src_name+'",dst_asn="'+dst_asn+'",dst_name="'+dst_name+'"} '+(rows[i].value*8)+'\n';
   }
 
   return result;
@@ -295,18 +299,18 @@ setHttpHandler(function(req) {
       result = [];
       rows = activeFlows('TOPOLOGY','ixp_pair',max_members,0,'edge') || [];
       for(i = 0; i < rows.length; i++) {
-        var [src,dst] = rows[i].key.split(SEP);
-        result.push({src:src,dst:dst,bps:rows[i].value*8});
+        var [src_asn,src_name,dst_asn,dst_name] = rows[i].key.split(SEP);
+        result.push({src_asn:src_asn,src_name:src_name,dst_asn:dst_asn,dst_name:dst_name,bps:rows[i].value*8});
       }
       break;
     case 'bgp':
       result = {};
       for(mems in bgp) {
-        let [mem1,mem2] = mems.split(SEP);
-        if(!result[mem1]) result[mem1] = [];
-        if(!result[mem2]) result[mem2] = [];
-        result[mem1].push(mem2);
-        result[mem2].push(mem1);
+        let [asn1,asn2] = mems.split(SEP);
+        if(!result[asn1]) result[asn1] = [];
+        if(!result[asn2]) result[asn2] = [];
+        result[asn1].push(asn2);
+        result[asn2].push(asn1);
       }
       break;
     case 'members':
