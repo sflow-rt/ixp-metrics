@@ -251,15 +251,15 @@ function prometheus() {
   result += prometheus_prefix+'bps{ethtype="ARP"} '+(prots['2054'] || 0)+'\n';
 
   // Packet size distribution
-  result += prometheus_prefix+'pktdist{size="0-63"} '+(points['dist-0-63'] || 0)+'\n';
-  result += prometheus_prefix+'pktdist{size="64"} '+(points['dist-64'] || 0)+'\n';
-  result += prometheus_prefix+'pktdist{size="65-127"} '+(points['dist-65-127'] || 0)+'\n';
-  result += prometheus_prefix+'pktdist{size="128-255"} '+(points['dist-128-255'] || 0)+'\n';
-  result += prometheus_prefix+'pktdist{size="256-511"} '+(points['dist-256-511'] || 0)+'\n';
-  result += prometheus_prefix+'pktdist{size="512-1023"} '+(points['dist-512-1023'] || 0)+'\n';
-  result += prometheus_prefix+'pktdist{size="1024-1517"} '+(points['dist-1024-1517'] || 0)+'\n';
-  result += prometheus_prefix+'pktdist{size="1518"} '+(points['dist-1518'] || 0)+'\n';
-  result += prometheus_prefix+'pktdist{size="1519-"} '+(points['dist-1519-'] || 0)+'\n';
+  result += prometheus_prefix+'pktdist{bin="0",size="0-63"} '+(points['dist-0-63'] || 0)+'\n';
+  result += prometheus_prefix+'pktdist{bin="1",size="64"} '+(points['dist-64'] || 0)+'\n';
+  result += prometheus_prefix+'pktdist{bin="2",size="65-127"} '+(points['dist-65-127'] || 0)+'\n';
+  result += prometheus_prefix+'pktdist{bin="3",size="128-255"} '+(points['dist-128-255'] || 0)+'\n';
+  result += prometheus_prefix+'pktdist{bin="4",size="256-511"} '+(points['dist-256-511'] || 0)+'\n';
+  result += prometheus_prefix+'pktdist{bin="5",size="512-1023"} '+(points['dist-512-1023'] || 0)+'\n';
+  result += prometheus_prefix+'pktdist{bin="6",size="1024-1517"} '+(points['dist-1024-1517'] || 0)+'\n';
+  result += prometheus_prefix+'pktdist{bin="7",size="1518"} '+(points['dist-1518'] || 0)+'\n';
+  result += prometheus_prefix+'pktdist{bin="8",size="1519-"} '+(points['dist-1519-'] || 0)+'\n';
 
   // Member traffic matrix
   var rows = activeFlows('TOPOLOGY','ixp_pair',max_members,0,'edge') || [];
