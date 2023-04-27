@@ -6,16 +6,18 @@
 
 include(scriptdir() + '/inc/trend.js');
 
-var T = getSystemProperty('ixp.flow.t') || 15;
 var N = getSystemProperty('ixp.flow.n') || 20;
+var T = getSystemProperty('ixp.flow.t') || 15;
+var MAX_MEMBERS = getSystemProperty('ixp.members.n') || 1000;
+
+var TOP_N = 5;
+var MIN_VAL = 1;
 var SEP = '_SEP_';
 
 var syslogHost = getSystemProperty("ixp.syslog.host");
 var syslogPort = getSystemProperty("ixp.syslog.port") || 514;
 var facility = 16; // local0
 var severity = 5;  // notice
-
-var max_members = getSystemProperty('ixp.members.n') || 1000;
 
 function sendWarning(msg) {
   if(syslogHost) syslog(syslogHost,syslogPort,facility,severity,msg);
@@ -84,23 +86,28 @@ updateMemberInfo();
 // metrics
 setFlow('ixp_bytes', {value:'bytes', t:T, fs: SEP, filter:'direction=ingress'});
 setFlow('ixp_frames', {value:'frames', t:T, fs:SEP, filter:'direction=ingress'});
-setFlow('ixp_src', {keys:'map:macsource:ixp_member', value:'bytes', n:N, t:T, fs:SEP, filter:'direction=ingress'});
-setFlow('ixp_dst', {keys:'map:macdestination:ixp_member', value:'bytes', n:N, t:T, fs:SEP, filter:'direction=ingress'});
-setFlow('ixp_pair', {keys:'map:macsource:ixp_member,map:macdestination:ixp_member', value:'bytes', n:20, t:T, fs:SEP, filter:'direction=ingress'});
-setFlow('ixp_protocol', {keys:'ethernetprotocol', value:'bytes', n:N, t:T, fs:SEP, filter:'direction=ingress'}); 
+setFlow('ixp_src', {keys:'map:macsource:ixp_member', value:'bytes', n:TOP_N, t:T, fs:SEP, filter:'direction=ingress'});
+setFlow('ixp_dst', {keys:'map:macdestination:ixp_member', value:'bytes', n:TOP_N, t:T, fs:SEP, filter:'direction=ingress'});
+setFlow('ixp_pair', {keys:'map:macsource:ixp_member,map:macdestination:ixp_member', value:'bytes', n:N, t:T, fs:SEP, filter:'direction=ingress'});
+setFlow('ixp_protocol', {keys:'ethernetprotocol', value:'bytes', n:TOP_N, t:T, fs:SEP, filter:'direction=ingress'}); 
 setFlow('ixp_pktsize', {keys:'range:bytes:0:63,range:bytes:64:64,range:bytes:65:127,range:bytes:128:255,range:bytes:256:511,range:bytes:512:1023,range:bytes:1024:1517,range:bytes:1518:1518,range:bytes:1519', value:'frames', n:9, t:T, filter:'direction=ingress'});
 
 // find member macs
-setFlow('ixp_ip4', {keys:'macsource,group:ipsource:ixp_member',value:'bytes',log:true,flowStart:true, n:N, t:T, fs:SEP});
-setFlow('ixp_ip6', {keys:'macsource,group:ip6source:ixp_member',value:'bytes',log:true,flowStart:true, n:N, t:T, fs:SEP});
+setFlow('ixp_ip4', {keys:'macsource,group:ipsource:ixp_member',value:'bytes', log:true, flowStart:true, t:T, fs:SEP});
+setFlow('ixp_ip6', {keys:'macsource,group:ip6source:ixp_member',value:'bytes', log:true, flowStart:true, t:T, fs:SEP});
 
 // find BGP connections
-setFlow('ixp_bgp', {keys:'or:[map:macsource:ixp_member]:[group:ipsource:ixp_member]:[group:ip6source:ixp_member],or:[map:macdestination:ixp_member]:[group:ipdestination:ixp_member]:[group:ip6destination:ixp_member]',value:'frames',filter:'tcpsourceport=179|tcpdestinationport=179',log:true,flowStart:true, n:N, t:T, fs:SEP});
+setFlow('ixp_bgp', {keys:'or:[map:macsource:ixp_member]:[group:ipsource:ixp_member]:[group:ip6source:ixp_member],or:[map:macdestination:ixp_member]:[group:ipdestination:ixp_member]:[group:ip6destination:ixp_member]',value:'frames',filter:'tcpsourceport=179|tcpdestinationport=179',log:true,flowStart:true, t:T, fs:SEP});
 
 // exceptions
-setFlow('ixp_srcmacunknown', {keys:'macsource', value:'bytes', filter:'direction=ingress&map:macsource:ixp_member=null', n:N, t:T, fs:SEP});
-setFlow('ixp_dstmacunknown', {keys:'macdestination', value:'bytes', filter:'direction=ingress&map:macdestination:ixp_member=null', n:N, t:T, fs:SEP});
-setFlow('ixp_badprotocol', {keys:'macsource,ethernetprotocol', value:'frames', filter:'ethernetprotocol!=2048,2054,34525', n:N, t:T, fs:SEP, log:true, flowStart:true});
+setFlow('ixp_srcmacunknown', {keys:'macsource', value:'bytes', filter:'direction=ingress&map:macsource:ixp_member=null', n:TOP_N, t:T, fs:SEP});
+setFlow('ixp_dstmacunknown', {keys:'macdestination', value:'bytes', filter:'direction=ingress&map:macdestination:ixp_member=null', n:TOP_N, t:T, fs:SEP});
+setFlow('ixp_badprotocol', {keys:'macsource,ethernetprotocol', value:'frames', filter:'ethernetprotocol!=2048,2054,34525', t:T, fs:SEP, log:true, flowStart:true});
+
+// BUM
+// t=600 since these should be rare
+setFlow('ixp_arp', {keys:'macsource,macdestination,arpoperation,arpipsender,arpiptarget', value:'frames', n:20, t:600, fs:SEP, filter:'direction=ingress'});
+setFlow('ixp_nunicast', {keys:'macsource,macdestination,ethernetprotocol', value:'frames', n:20, t:600, fs:SEP, filter:'(isbroadcast=true|ismulticast=true)&direction=ingress'});
 
 var other = '-other-';
 function calculateTopN(metric,n,minVal,total_bps) {     
@@ -141,7 +148,7 @@ function getMetric(res, idx, defVal) {
 }
 
 function flowCount(flow) {
-  var res = activeFlows('TOPOLOGY',flow,1,0,'edge');
+  var res = activeFlows('TOPOLOGY',flow,MIN_VAL,0,'edge');
   return res && res.length > 0 ? res[0].value : 0;
 }
 
@@ -173,15 +180,20 @@ function lookupUnknownMacs(topn) {
 setIntervalHandler(function(now) {
   points = {};
 
+  // query counters for total bps in/out
+  var counters = metric('EDGE','sum:ifinoctets,sum:ifoutoctets');
+  points['bps_in'] = getMetric(counters,0,0) * 8; 
+  points['bps_out'] = getMetric(counters,1,0) * 8;
+
   points['bgp-connections'] = Object.keys(bgp).length;
 
   var bps = flowCount('ixp_bytes') * 8;
-  points['top-5-memsrc'] = calculateTopN('ixp_src',5,1,bps);
-  points['top-5-memdst'] = calculateTopN('ixp_dst',5,1,bps);
-  points['top-5-mempair'] = calculateTopN('ixp_pair',5,1,bps);
-  points['top-5-protocol'] = calculateTopN('ixp_protocol',5,1,bps);
-  points['top-5-memunknownsrc'] = lookupUnknownMacs(calculateTopN('ixp_srcmacunknown',5,1,0));
-  points['top-5-memunknowndst'] = lookupUnknownMacs(calculateTopN('ixp_dstmacunknown',5,1,0));
+  points['top-5-memsrc'] = calculateTopN('ixp_src',TOP_N,MIN_VAL,bps);
+  points['top-5-memdst'] = calculateTopN('ixp_dst',TOP_N,MIN_VAL,bps);
+  points['top-5-mempair'] = calculateTopN('ixp_pair',TOP_N,MIN_VAL,bps);
+  points['top-5-protocol'] = calculateTopN('ixp_protocol',TOP_N,MIN_VAL,bps);
+  points['top-5-memunknownsrc'] = lookupUnknownMacs(calculateTopN('ixp_srcmacunknown',TOP_N,MIN_VAL,0));
+  points['top-5-memunknowndst'] = lookupUnknownMacs(calculateTopN('ixp_dstmacunknown',TOP_N,MIN_VAL,0));
 
   // calculate packet size distribution
   var ix0=0,ix64=0,ix65=0,ix128=0,ix256=0,ix512=0,ix1024=0,ix1518=0,ix1519=0,sum=0;
@@ -256,6 +268,10 @@ function prometheusName(str) {
 function prometheus() {
   var result = prometheus_prefix+'bgp_connections ' + (points['bgp-connections'] || 0) + '\n';
 
+  // Total traffic in/out
+  result += prometheus_prefix+'bps_total{direction="in"} '+(points['bps_in'] || 0)+'\n';
+  result += prometheus_prefix+'bps_total{direction="out"} '+(points['bps_out'] || 0)+'\n';;
+
   // Protocols
   var prots = points['top-5-protocol'] || {};
   result += prometheus_prefix+'bps{ethtype="IPv4"} '+(prots['2048'] || 0)+'\n';
@@ -274,7 +290,7 @@ function prometheus() {
   result += prometheus_prefix+'pktdist{bin="8",size="1519-"} '+(points['dist-1519-'] || 0)+'\n';
 
   // Member traffic matrix
-  var rows = activeFlows('TOPOLOGY','ixp_pair',max_members,0,'edge') || [];
+  var rows = activeFlows('TOPOLOGY','ixp_pair',MAX_MEMBERS,MIN_VAL,'edge') || [];
   for(var i = 0; i < rows.length; i++) {
     let [src_asn,src_name,dst_asn,dst_name] = rows[i].key.split(SEP);
     src_name = prometheusName(src_name);
@@ -283,6 +299,51 @@ function prometheus() {
   }
 
   return result;
+}
+
+function memberCounters(name,n) {
+  var result = [];
+  var rows = table('EDGE','sort:'+name+':-'+n);
+  for(i = 0; i < rows.length; i++) {
+    var row = rows[i][0];
+    if(!row.metricValue) break;
+    var entry = {agent:row.agent,ifindex:row.dataSource,value:row.metricValue};
+    var port = topologyInterfaceToPort(row.agent,row.dataSource);
+    if(port) {
+      entry.node = port.node;
+      entry.port = port.port; 
+    }
+    result.push(entry);
+  }
+  return result;
+}
+
+function memberLocations() {
+  var locations = [];
+  var macs = topologyLocatedHostMacs();
+  if(!macs) return locations;
+  for each (var mac in macs) {
+    logInfo(mac);
+    var locs = topologyLocateHostMac(mac);
+    if(!locs) continue;
+    for each (var loc in locs) {
+      var entry = {};
+      entry.mac = mac;
+      entry['ouiname'] = loc.ouiname || '';
+      entry['node'] = loc.node || loc.agent;
+      entry['port'] = loc.port || loc.ifindex;
+      entry['vlan'] = loc.vlan || '';
+
+      var member = macToMember[mac] || learnedMacToMember[mac];
+      if(member) {
+        var [asn,name] = member.split(SEP);
+        entry['asn'] = asn;
+        entry['name'] = name;
+      }
+      locations.push(entry);
+    }
+  }
+  return locations;
 }
 
 setHttpHandler(function(req) {
@@ -309,9 +370,9 @@ setHttpHandler(function(req) {
     case 'matrix':
       if(path.length > 1) throw "not_found";
       result = [];
-      rows = activeFlows('TOPOLOGY','ixp_pair',max_members,0,'edge') || [];
+      rows = activeFlows('TOPOLOGY','ixp_pair',MAX_MEMBERS,MIN_VAL,'edge') || [];
       for(i = 0; i < rows.length; i++) {
-        var [src_asn,src_name,dst_asn,dst_name] = rows[i].key.split(SEP);
+        let [src_asn,src_name,dst_asn,dst_name] = rows[i].key.split(SEP);
         result.push({src_asn:src_asn,src_name:src_name,dst_asn:dst_asn,dst_name:dst_name,bps:rows[i].value*8});
       }
       break;
@@ -325,6 +386,31 @@ setHttpHandler(function(req) {
         result[asn2].push(asn1);
       }
       break;
+    case 'arp':
+       result = [];
+       rows = activeFlows('TOPOLOGY','ixp_arp',100,MIN_VAL,'edge') || [];
+       for(i = 0; i < rows.length; i++) {
+         let [macsource,macdestination,arpoperation,arpipsender,arpiptarget] = rows[i].key.split(SEP);
+         result.push({smac:macsource,dmac:macdestination,op:arpoperation,sender:arpipsender,target:arpiptarget,fps:rows[i].value});
+       }
+       break;
+    case 'nunicast':
+       result = [];
+       rows = activeFlows('TOPOLOGY','ixp_nunicast',100,MIN_VAL,'edge') || [];
+       for(i = 0; i < rows.length; i++) {
+         let [macsource,macdestination,ethernetprotocol] = rows[i].key.split(SEP);
+         result.push({smac:macsource,dmac:macdestination,ethtype:ethernetprotocol,fps:rows[i].value});
+       }
+       break;
+    case 'multicast':
+       result = memberCounters('ifinmulticastpkts',10);;
+       break; 
+    case 'broadcast':
+       result = memberCounters('ifinbroadcastpkts',10);
+       break;
+    case 'locations':
+       result = memberLocations();
+       break;
     case 'members':
       switch(req.method) {
         case 'POST':
