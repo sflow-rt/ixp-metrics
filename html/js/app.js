@@ -73,7 +73,7 @@ $(function() {
     includeOther:false,
     sep: SEP,
     metric: 'top-5-memunknownsrc',
-    legendHeadings: ['Src Mac'],
+    legendHeadings: ['Mac','ASN','Name'],
     units: 'Bits per Second'},
   db);
   $('#topunknowndst').chart({
@@ -82,7 +82,7 @@ $(function() {
     includeOther:false,
     sep: SEP,
     metric: 'top-5-memunknowndst',
-    legendHeadings: ['Dst Mac'],
+    legendHeadings: ['Mac','ASN','Name'],
     units: 'Bits per Second'},
   db);
   $('#pktsizes').chart({

@@ -1,6 +1,6 @@
 // author: InMon Corp.
-// version: 1.1
-// date: 4/25/2023
+// version: 1.2
+// date: 4/26/2023
 // description: Internet Exchange Provider (IXP) Metrics
 // copyright: Copyright (c) 2021-2023 InMon Corp. ALL RIGHTS RESERVED
 
@@ -28,13 +28,14 @@ var points = {};
 var members = storeGet('members') || {};
 
 var macToMember = {};
-var ipGroups = {};
+var learnedMacToMember = {};
 function updateMemberInfo() {
   var memberToMac,memberToIP,member,name,asn,rec,macs,ips,conns,j,conn,vlan_list,k,vlan,mac;
 
   memberToMac = {};
   memberToIP = {};
   macToMember = {};
+  learnedMacToMember = {};
 
   if(!members.member_list || members.member_list.length === 0) return;
 
@@ -159,6 +160,16 @@ function ageBGP(now) {
   }
 }
 
+function lookupUnknownMacs(topn) {
+  var i,key,member,result = {};
+  for (key in topn) {
+    if(other === key) result[other] = topn[key];
+    member = learnedMacToMember[key];
+    result[key+SEP+(member ? member : SEP)] = topn[key]; 
+  }
+  return result;
+}
+
 setIntervalHandler(function(now) {
   points = {};
 
@@ -169,8 +180,8 @@ setIntervalHandler(function(now) {
   points['top-5-memdst'] = calculateTopN('ixp_dst',5,1,bps);
   points['top-5-mempair'] = calculateTopN('ixp_pair',5,1,bps);
   points['top-5-protocol'] = calculateTopN('ixp_protocol',5,1,bps);
-  points['top-5-memunknownsrc'] = calculateTopN('ixp_srcmacunknown',5,1,0);
-  points['top-5-memunknowndst'] = calculateTopN('ixp_dstmacunknown',5,1,0);
+  points['top-5-memunknownsrc'] = lookupUnknownMacs(calculateTopN('ixp_srcmacunknown',5,1,0));
+  points['top-5-memunknowndst'] = lookupUnknownMacs(calculateTopN('ixp_dstmacunknown',5,1,0));
 
   // calculate packet size distribution
   var ix0=0,ix64=0,ix65=0,ix128=0,ix256=0,ix512=0,ix1024=0,ix1518=0,ix1519=0,sum=0;
@@ -213,6 +224,7 @@ setFlowHandler(function(flow) {
   case 'ixp_ip4':
   case 'ixp_ip6':
     let [mmac,asn,name] = flow.flowKeys.split(SEP);
+    learnedMacToMember[mmac] = asn+SEP+name;
     let macMem = macToMember[mmac];
     if(macMem) {
       let [mac_asn,mac_name] = macMem.split(SEP);
