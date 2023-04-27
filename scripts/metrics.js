@@ -276,16 +276,6 @@ function ageBGP(now) {
   }
 }
 
-function lookupUnknownMacs(topn) {
-  var i,key,member,result = {};
-  for (key in topn) {
-    if(other === key) result[other] = topn[key];
-    member = learnedMacToMember[key];
-    result[key+SEP+(member ? member : SEP)] = topn[key]; 
-  }
-  return result;
-}
-
 setIntervalHandler(function(now) {
   points = {};
 
@@ -301,8 +291,8 @@ setIntervalHandler(function(now) {
   points['top-5-memdst'] = calculateTopN('ixp_dst',TOP_N,MIN_VAL,bps);
   points['top-5-mempair'] = calculateTopN('ixp_pair',TOP_N,MIN_VAL,bps);
   points['top-5-protocol'] = calculateTopN('ixp_protocol',TOP_N,MIN_VAL,bps);
-  points['top-5-memunknownsrc'] = lookupUnknownMacs(calculateTopN('ixp_srcmacunknown',TOP_N,MIN_VAL,0));
-  points['top-5-memunknowndst'] = lookupUnknownMacs(calculateTopN('ixp_dstmacunknown',TOP_N,MIN_VAL,0));
+  points['top-5-memunknownsrc'] = calculateTopN('ixp_srcmacunknown',TOP_N,MIN_VAL,0);
+  points['top-5-memunknowndst'] = calculateTopN('ixp_dstmacunknown',TOP_N,MIN_VAL,0);
 
   // calculate packet size distribution
   var ix0=0,ix64=0,ix65=0,ix128=0,ix256=0,ix512=0,ix1024=0,ix1518=0,ix1519=0,sum=0;
