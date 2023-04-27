@@ -181,7 +181,7 @@ setIntervalHandler(function(now) {
   points = {};
 
   // query counters for total bps in/out
-  var counters = metric('EDGE','sum:ifinoctets,sum:ifoutoctets');
+  var counters = metric('EDGE','sum:ifinoctets,sum:ifoutoctets',{iftype:['ethernetCsmacd']});
   points['bps_in'] = getMetric(counters,0,0) * 8; 
   points['bps_out'] = getMetric(counters,1,0) * 8;
 
