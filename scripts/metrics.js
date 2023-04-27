@@ -9,18 +9,18 @@ include(scriptdir() + '/inc/trend.js');
 var N = getSystemProperty('ixp.flow.n') || 20;
 var T = getSystemProperty('ixp.flow.t') || 15;
 var MAX_MEMBERS = getSystemProperty('ixp.members.n') || 1000;
+var ETHTYPE = getSystemProperty('ixp.allowed.ethertype') || '2048,2054,34525';
+var SYSLOG_HOST = getSystemProperty("ixp.syslog.host");
+var SYSLOG_PORT = getSystemProperty("ixp.syslog.port") || 514;
+var FACILITY = getSystemProperty("ixp.syslog.facility") || 16; // local0
+var SEVERITY = getSystemProperty("ixp.syslog.severity") || 5;  // notice
 
 var TOP_N = 5;
 var MIN_VAL = 1;
 var SEP = '_SEP_';
 
-var syslogHost = getSystemProperty("ixp.syslog.host");
-var syslogPort = getSystemProperty("ixp.syslog.port") || 514;
-var facility = 16; // local0
-var severity = 5;  // notice
-
 function sendWarning(msg) {
-  if(syslogHost) syslog(syslogHost,syslogPort,facility,severity,msg);
+  if(SYSLOG_HOST) syslog(SYSLOG_HOST,SYSLOG_PORT,FACILITY,SEVERITY,msg);
   else logWarning(JSON.stringify(msg));
 }
 
@@ -84,30 +84,139 @@ function updateMemberInfo() {
 updateMemberInfo();
 
 // metrics
-setFlow('ixp_bytes', {value:'bytes', t:T, fs: SEP, filter:'direction=ingress'});
-setFlow('ixp_frames', {value:'frames', t:T, fs:SEP, filter:'direction=ingress'});
-setFlow('ixp_src', {keys:'map:macsource:ixp_member', value:'bytes', n:TOP_N, t:T, fs:SEP, filter:'direction=ingress'});
-setFlow('ixp_dst', {keys:'map:macdestination:ixp_member', value:'bytes', n:TOP_N, t:T, fs:SEP, filter:'direction=ingress'});
-setFlow('ixp_pair', {keys:'map:macsource:ixp_member,map:macdestination:ixp_member', value:'bytes', n:N, t:T, fs:SEP, filter:'direction=ingress'});
-setFlow('ixp_protocol', {keys:'ethernetprotocol', value:'bytes', n:TOP_N, t:T, fs:SEP, filter:'direction=ingress'}); 
-setFlow('ixp_pktsize', {keys:'range:bytes:0:63,range:bytes:64:64,range:bytes:65:127,range:bytes:128:255,range:bytes:256:511,range:bytes:512:1023,range:bytes:1024:1517,range:bytes:1518:1518,range:bytes:1519', value:'frames', n:9, t:T, filter:'direction=ingress'});
+//EDGE_FILTER used when logging flows to select edge measurements
+// Note: activeFlows() de-duplicates so not needed for metrics
+var EDGE_FILTER = 'direction=ingress&link:inputifindex=null';
+setFlow('ixp_bytes', {
+  value:'bytes',
+  t:T,
+  fs: SEP
+});
+setFlow('ixp_frames', {
+  value:'frames',
+  t:T,
+  fs:SEP
+});
+setFlow('ixp_src', {
+  keys:'map:macsource:ixp_member',
+  value:'bytes',
+  n:TOP_N,
+  t:T,
+  fs:SEP
+});
+setFlow('ixp_dst', {
+  keys:'map:macdestination:ixp_member',
+  value:'bytes',
+  n:TOP_N,
+  t:T,
+  fs:SEP
+});
+setFlow('ixp_pair', {
+  keys:'map:macsource:ixp_member,map:macdestination:ixp_member',
+  value:'bytes',
+  n:N,
+  t:T,
+  fs:SEP
+});
+setFlow('ixp_protocol', {
+  keys:'ethernetprotocol',
+  value:'bytes',
+  n:TOP_N,
+  t:T,
+  fs:SEP
+}); 
+setFlow('ixp_pktsize', {
+  keys:'range:bytes:0:63,range:bytes:64:64,range:bytes:65:127,range:bytes:128:255,range:bytes:256:511,range:bytes:512:1023,range:bytes:1024:1517,range:bytes:1518:1518,range:bytes:1519',
+  value:'frames',
+  n:9,
+  t:T,
+  fs:','
+});
 
 // find member macs
-setFlow('ixp_ip4', {keys:'macsource,group:ipsource:ixp_member',value:'bytes', log:true, flowStart:true, t:T, fs:SEP});
-setFlow('ixp_ip6', {keys:'macsource,group:ip6source:ixp_member',value:'bytes', log:true, flowStart:true, t:T, fs:SEP});
+setFlow('ixp_ip4', {
+  keys:'macsource,group:ipsource:ixp_member',
+  filter:EDGE_FILTER+'&first:stack:.:ip:ip6=ip',
+  value:'bytes',
+  t:T,
+  fs:SEP,
+  log:true,
+  flowStart:true
+});
+setFlow('ixp_ip6', {
+  keys:'macsource,group:ip6source:ixp_member',
+  filter:EDGE_FILTER+'&first:stack:.:ip:ip6=ip6',
+  value:'bytes',
+  t:T,
+  fs:SEP,
+  log:true,
+  flowStart:true
+});
 
 // find BGP connections
-setFlow('ixp_bgp', {keys:'or:[map:macsource:ixp_member]:[group:ipsource:ixp_member]:[group:ip6source:ixp_member],or:[map:macdestination:ixp_member]:[group:ipdestination:ixp_member]:[group:ip6destination:ixp_member]',value:'frames',filter:'tcpsourceport=179|tcpdestinationport=179',log:true,flowStart:true, t:T, fs:SEP});
+setFlow('ixp_bgp', {
+  keys:'or:[map:macsource:ixp_member]:[group:ipsource:ixp_member],or:[map:macdestination:ixp_member]:[group:ipdestination:ixp_member]',
+  filter:EDGE_FILTER+'&first:stack:.:ip:ip6=ip&(tcpsourceport=179|tcpdestinationport=179)',
+  value:'frames',
+  t:T,
+  fs:SEP,
+  log:true,
+  flowStart:true
+});
+setFlow('ixp_bgp6', {
+  keys:'or:[map:macsource:ixp_member]:[group:ipsource:ixp_member]:[group:ip6source:ixp_member],or:[map:macdestination:ixp_member]:[group:ipdestination:ixp_member]:[group:ip6destination:ixp_member]',
+  filter:EDGE_FILTER+'&first:stack:.:ip:ip6=ip6&(tcpsourceport=179|tcpdestinationport=179)',
+  value:'frames',
+  t:T,
+  fs:SEP,
+  log:true,
+  flowStart:true
+});
 
 // exceptions
-setFlow('ixp_srcmacunknown', {keys:'macsource', value:'bytes', filter:'direction=ingress&map:macsource:ixp_member=null', n:TOP_N, t:T, fs:SEP});
-setFlow('ixp_dstmacunknown', {keys:'macdestination', value:'bytes', filter:'direction=ingress&map:macdestination:ixp_member=null', n:TOP_N, t:T, fs:SEP});
-setFlow('ixp_badprotocol', {keys:'macsource,ethernetprotocol', value:'frames', filter:'ethernetprotocol!=2048,2054,34525', t:T, fs:SEP, log:true, flowStart:true});
+setFlow('ixp_srcmacunknown', {
+  keys:'macsource',
+  filter:'map:macsource:ixp_member=null',
+  value:'bytes',
+  n:TOP_N,
+  t:T,
+  fs:SEP
+});
+setFlow('ixp_dstmacunknown', {
+  keys:'macdestination',
+  filter:'map:macdestination:ixp_member=null',
+  value:'bytes',
+  n:TOP_N,
+  t:T,
+  fs:SEP
+});
+setFlow('ixp_badprotocol', {
+  keys:'macsource,ethernetprotocol',
+  filter:EDGE_FILTER+'&ethernetprotocol!='+ETHTYPE,
+  value:'frames',
+  t:T,
+  fs:SEP,
+  log:true,
+  flowStart:true
+});
 
 // BUM
 // t=600 since these should be rare
-setFlow('ixp_arp', {keys:'macsource,macdestination,arpoperation,arpipsender,arpiptarget', value:'frames', n:20, t:600, fs:SEP, filter:'direction=ingress'});
-setFlow('ixp_nunicast', {keys:'macsource,macdestination,ethernetprotocol', value:'frames', n:20, t:600, fs:SEP, filter:'(isbroadcast=true|ismulticast=true)&direction=ingress'});
+setFlow('ixp_arp', {
+  keys:'macsource,macdestination,arpoperation,arpipsender,arpiptarget',
+  value:'frames',
+  n:20,
+  t:600,
+  fs:SEP
+});
+setFlow('ixp_nunicast', {
+  keys:'macsource,macdestination,ethernetprotocol',
+  filter:'isbroadcast=true|ismulticast=true',
+  value:'frames',
+  n:20,
+  t:600,
+  fs:SEP
+});
 
 var other = '-other-';
 function calculateTopN(metric,n,minVal,total_bps) {     
@@ -252,6 +361,7 @@ setFlowHandler(function(flow) {
     sendWarning({ixp_evt:"protocol", "mac":smac, "ethtype":ethtype});
     break;
   case 'ixp_bgp':
+  case 'ixp_bgp6':
     let [asn1,name1,asn2,name2] = flow.flowKeys.split(SEP);
     let bgpkey = asn1 > asn2 ? asn2+SEP+asn1 : asn1+SEP+asn2;
     bgp[bgpkey] = flow.start;
@@ -318,12 +428,11 @@ function memberCounters(name,n) {
   return result;
 }
 
-function memberLocations() {
+function memberLocations(mac) {
   var locations = [];
-  var macs = topologyLocatedHostMacs();
+  var macs = mac || topologyLocatedHostMacs();
   if(!macs) return locations;
   for each (var mac in macs) {
-    logInfo(mac);
     var locs = topologyLocateHostMac(mac);
     if(!locs) continue;
     for each (var loc in locs) {
@@ -409,7 +518,7 @@ setHttpHandler(function(req) {
        result = memberCounters('ifinbroadcastpkts',10);
        break;
     case 'locations':
-       result = memberLocations();
+       result = memberLocations(req.query['mac']);
        break;
     case 'members':
       switch(req.method) {
