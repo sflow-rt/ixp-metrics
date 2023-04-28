@@ -1,6 +1,6 @@
 // author: InMon Corp.
 // version: 1.2
-// date: 4/26/2023
+// date: 4/27/2023
 // description: Internet Exchange Provider (IXP) Metrics
 // copyright: Copyright (c) 2021-2023 InMon Corp. ALL RIGHTS RESERVED
 
@@ -154,9 +154,11 @@ setFlow('ixp_ip6', {
 });
 
 // find BGP connections
+// BGP_FILTER used to detect established BGP connections
+var BGP_FILTER = 'tcpflags~....1.000&(tcpsourceport=179|tcpdestinationport=179)';
 setFlow('ixp_bgp', {
-  keys:'or:[map:macsource:ixp_member]:[group:ipsource:ixp_member],or:[map:macdestination:ixp_member]:[group:ipdestination:ixp_member]',
-  filter:EDGE_FILTER+'&first:stack:.:ip:ip6=ip&(tcpsourceport=179|tcpdestinationport=179)',
+  keys:'or:[map:macsource:ixp_member]:[group:ipsource:ixp_member],or:[map:macdestination:ixp_member]:[group:ipdestination:ixp_member],macsource,macdestination,ipsource,ipdestination',
+  filter:EDGE_FILTER+'&first:stack:.:ip:ip6=ip&'+BGP_FILTER,
   value:'frames',
   t:T,
   fs:SEP,
@@ -164,8 +166,8 @@ setFlow('ixp_bgp', {
   flowStart:true
 });
 setFlow('ixp_bgp6', {
-  keys:'or:[map:macsource:ixp_member]:[group:ipsource:ixp_member]:[group:ip6source:ixp_member],or:[map:macdestination:ixp_member]:[group:ipdestination:ixp_member]:[group:ip6destination:ixp_member]',
-  filter:EDGE_FILTER+'&first:stack:.:ip:ip6=ip6&(tcpsourceport=179|tcpdestinationport=179)',
+  keys:'or:[map:macsource:ixp_member]:[group:ipsource:ixp_member]:[group:ip6source:ixp_member],or:[map:macdestination:ixp_member]:[group:ipdestination:ixp_member]:[group:ip6destination:ixp_member],macsource,macdestination,ip6source,ip6destination',
+  filter:EDGE_FILTER+'&first:stack:.:ip:ip6=ip6&'+BGP_FILTER,
   value:'frames',
   t:T,
   fs:SEP,
@@ -270,7 +272,7 @@ function ageBGP(now) {
   bgpLastSweep = now;
 
   for(var key in bgp) {
-    if(now - bgp[key] > bgpAgingMs) {
+    if(now - bgp[key].lastUpdate > bgpAgingMs) {
       delete bgp[key];
     }
   }
@@ -352,9 +354,20 @@ setFlowHandler(function(flow) {
     break;
   case 'ixp_bgp':
   case 'ixp_bgp6':
-    let [asn1,name1,asn2,name2] = flow.flowKeys.split(SEP);
-    let bgpkey = asn1 > asn2 ? asn2+SEP+asn1 : asn1+SEP+asn2;
-    bgp[bgpkey] = flow.start;
+    let [asn1,name1,asn2,name2,mac1,mac2,addr1,addr2] = flow.flowKeys.split(SEP);
+    if(mac1 > mac2) {
+      bgp[addr1+','+addr2] = {
+        member1: {asn:asn1,name:name1,mac:mac1,addr:addr1},
+        member2: {asn:asn2,name:name2,mac:mac2,addr:addr2},
+        lastUpdate:flow.start
+      };
+    } else {
+      bgp[addr2+','+addr1] = {
+        member1: {asn:asn2,name:name2,mac:mac2,addr:addr2},
+        member2: {asn:asn1,name:name1,mac:mac1,addr:addr1},
+        lastUpdate:flow.start
+      };
+    }
     break;
   }
 },['ixp_badprotocol','ixp_ip4','ixp_ip6','ixp_bgp']);
@@ -476,13 +489,9 @@ setHttpHandler(function(req) {
       }
       break;
     case 'bgp':
-      result = {};
-      for(mems in bgp) {
-        let [asn1,asn2] = mems.split(SEP);
-        if(!result[asn1]) result[asn1] = [];
-        if(!result[asn2]) result[asn2] = [];
-        result[asn1].push(asn2);
-        result[asn2].push(asn1);
+      result = [];
+      for(key in bgp) {
+        result.push(bgp[key]);
       }
       break;
     case 'arp':
