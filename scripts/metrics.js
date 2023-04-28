@@ -166,7 +166,7 @@ setFlow('ixp_bgp', {
   flowStart:true
 });
 setFlow('ixp_bgp6', {
-  keys:'or:[map:macsource:ixp_member]:[group:ipsource:ixp_member]:[group:ip6source:ixp_member],or:[map:macdestination:ixp_member]:[group:ipdestination:ixp_member]:[group:ip6destination:ixp_member],macsource,macdestination,ip6source,ip6destination',
+  keys:'or:[map:macsource:ixp_member]:[group:ip6source:ixp_member],or:[map:macdestination:ixp_member]:[group:ip6destination:ixp_member],macsource,macdestination,ip6source,ip6destination',
   filter:EDGE_FILTER+'&first:stack:.:ip:ip6=ip6&'+BGP_FILTER,
   value:'frames',
   t:T,
