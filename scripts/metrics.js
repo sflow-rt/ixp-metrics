@@ -370,7 +370,7 @@ setFlowHandler(function(flow) {
     }
     break;
   }
-},['ixp_badprotocol','ixp_ip4','ixp_ip6','ixp_bgp']);
+},['ixp_badprotocol','ixp_ip4','ixp_ip6','ixp_bgp','ixp_bgp6']);
 
 const prometheus_prefix = (getSystemProperty("prometheus.metric.prefix") || 'sflow_') + 'ixp_';
 
