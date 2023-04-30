@@ -203,6 +203,14 @@ setFlow('ixp_badprotocol', {
 });
 
 // BUM
+setFlow('ixp_nunicast', {
+  keys:'macsource,macdestination,ethernetprotocol',
+  filter:'isbroadcast=true|ismulticast=true',
+  value:'frames',
+  n:TOP_N,
+  t:T,
+  fs:SEP
+});
 // t=600 since these should be rare
 setFlow('ixp_arp', {
   keys:'macsource,macdestination,arpoperation,arpipsender,arpiptarget',
@@ -282,13 +290,18 @@ setIntervalHandler(function(now) {
   points = {};
 
   // query counters for total bps in/out
-  var counters = metric('EDGE','sum:ifinoctets,sum:ifoutoctets',{iftype:['ethernetCsmacd']});
+  var counters = metric('EDGE','sum:ifinoctets,sum:ifoutoctets,sum:ifinbroadcastpkts,sum:ifinmulticastpkts',{iftype:['ethernetCsmacd']});
   points['bps_in'] = getMetric(counters,0,0) * 8; 
   points['bps_out'] = getMetric(counters,1,0) * 8;
+  points['broadcast'] = getMetric(counters,2,0);
+  points['multicast'] = getMetric(counters,3,0);
 
   points['bgp-connections'] = Object.keys(bgp).length;
 
   var bps = flowCount('ixp_bytes') * 8;
+  var fps = flowCount('ixp_frames');
+  points['bps'] = bps;
+  points['fps'] = fps;
   points['top-5-memsrc'] = calculateTopN('ixp_src',TOP_N,MIN_VAL,bps);
   points['top-5-memdst'] = calculateTopN('ixp_dst',TOP_N,MIN_VAL,bps);
   points['top-5-mempair'] = calculateTopN('ixp_pair',TOP_N,MIN_VAL,bps);
@@ -381,9 +394,13 @@ function prometheusName(str) {
 function prometheus() {
   var result = prometheus_prefix+'bgp_connections ' + (points['bgp-connections'] || 0) + '\n';
 
-  // Total traffic in/out
+  // Total traffic in/out based on counters
   result += prometheus_prefix+'bps_total{direction="in"} '+(points['bps_in'] || 0)+'\n';
-  result += prometheus_prefix+'bps_total{direction="out"} '+(points['bps_out'] || 0)+'\n';;
+  result += prometheus_prefix+'bps_total{direction="out"} '+(points['bps_out'] || 0)+'\n';
+
+  // Total traffic in/out based on packet samples
+  result += prometheus_prefix+'bps '+(points['bps'] || 0)+'\n';
+  result += prometheus_prefix+'fps '+(points['fps'] || 0)+'\n';
 
   // Protocols
   var prots = points['top-5-protocol'] || {};
@@ -431,9 +448,9 @@ function memberCounters(name,n) {
   return result;
 }
 
-function memberLocations(mac) {
+function memberLocations(find_mac,find_asn,find_name) {
   var locations = [];
-  var macs = mac || topologyLocatedHostMacs();
+  var macs = find_mac || topologyLocatedHostMacs();
   if(!macs) return locations;
   for each (var mac in macs) {
     var locs = topologyLocateHostMac(mac);
@@ -452,6 +469,8 @@ function memberLocations(mac) {
         entry['asn'] = asn;
         entry['name'] = name;
       }
+      if(find_asn && !find_asn.includes(entry.asn || '')) continue;
+      if(find_name && !find_name.some((val) => (entry.name || '').toLowerCase().indexOf(val.toLowerCase()) >= 0)) continue;
       locations.push(entry);
     }
   }
@@ -517,7 +536,7 @@ setHttpHandler(function(req) {
        result = memberCounters('ifinbroadcastpkts',10);
        break;
     case 'locations':
-       result = memberLocations(req.query['mac']);
+       result = memberLocations(req.query['mac'],req.query['asn'],req.query['name']);
        break;
     case 'members':
       switch(req.method) {

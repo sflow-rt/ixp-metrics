@@ -2,6 +2,7 @@ $(function() {
   var restPath = '../scripts/metrics.js/';
   var trendURL = restPath + 'trend/json';
   var membersURL = restPath + 'members/json';
+  var locateURL = restPath + 'locations/json';
   var SEP = '_SEP_';
 
   function setNav(target) {
@@ -85,6 +86,15 @@ $(function() {
     legendHeadings: ['Dst Mac'],
     units: 'Bits per Second'},
   db);
+  $('#topnucast').chart({
+    type: 'trend',
+    stack: true,
+    includeOther:false,
+    sep: SEP,
+    metrics: ['broadcast','multicast'],
+    legend: ['Broadcast','Multicast'],
+    units: 'Frames per Second'},
+  db);
   $('#pktsizes').chart({
     type:'trend',
     metrics:['dist-0-63','dist-64','dist-65-127','dist-128-255','dist-256-511','dist-512-1023','dist-1024-1517','dist-1518','dist-1519-'],
@@ -98,6 +108,49 @@ $(function() {
     metrics:['bgp-connections'],
     units: 'Member Connections'},
   db);
+
+  $('#locateForm').submit(function( event ) {
+    event.preventDefault();
+    $('#location').hide();
+    var search = $.trim($('#member_search').removeClass('is-invalid').val());
+    var query;
+    if(/^([0-9A-Fa-f]{2}[:-]?){5}[0-9A-Fa-f]{2}$/.test(search)) {
+      query = { mac: search.replace(/[:-]/g,'').toUpperCase()};
+    } else if(/^[0-9]{1,10}$/.test(search)) {
+      query = { asn: search };
+    } else {
+      query = { name: search };
+    }
+    $.ajax({
+      url: locateURL,
+      type: 'GET',
+      data: query,
+      contentType: 'application/json',
+      success: function(resp) {
+        var rows;
+        if(resp && resp.length > 0) {
+          var rows = '';
+          for(var i = 0; i < resp.length; i++) {
+            rows += '<tr>';
+            rows += '<td>' + (resp[i].node || '') + '</td>';
+            rows += '<td>' + (resp[i].port || '') + '</td>';
+            rows += '<td>' + (resp[i].mac || '') + '</td>';
+            rows += '<td>' + (resp[i].vlan || '') + '</td>';
+            rows += '<td>' + (resp[i].asn || '') + '</td>';
+            rows += '<td>' + (resp[i].name || '') + '</td>';
+            rows += '</tr>';
+          }
+          $('#location tbody').html(rows);
+          $('#location').show();
+        } else {
+          $('#member_search').addClass('is-invalid');
+        }
+      },
+      error: function() {
+        $('#member_search').addClass('is-invalid');
+      } 
+    });
+  });
 
   $('#membersFile').change(function(event) {
     var input = event.target;

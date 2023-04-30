@@ -31,6 +31,9 @@
             <a class="nav-link" href="#traffic">Traffic</a>
           </li>
           <li class="nav-item" data-toggle="collapse" data-target=".navbar-collapse.show">
+            <a class="nav-link" href="#query">Locate</a>
+          </li>
+          <li class="nav-item" data-toggle="collapse" data-target=".navbar-collapse.show">
             <a class="nav-link" href="#settings">Settings</a>
           </li>
           <li class="nav-item" data-toggle="collapse" data-target=".navbar-collapse.show">
@@ -39,18 +42,10 @@
         </ul>
       </div>
     </nav>
-    <main class="container" role="main">
+    <main class="container-fluid" role="main">
       <section id="traffic">
         <div class="row">
-          <div class="col-lg-6">
-            <div class="card mb-3">
-              <h5 class="card-header">Protocols</h5>
-              <div class="card-body">
-                <div id="topprotos" class="trend"></div>
-              </div>
-            </div>
-          </div>
-          <div class="col-lg-6">
+          <div class="col-lg-4">
             <div class="card mb-3">
               <h5 class="card-header">Member Sources</h5>
               <div class="card-body">
@@ -58,9 +53,7 @@
               </div>
             </div>
           </div>
-        </div>
-        <div class="row">
-          <div class="col-lg-6">
+          <div class="col-lg-4">
             <div class="card mb-3">
               <h5 class="card-header">Member Destinations</h5>
               <div class="card-body">
@@ -68,9 +61,9 @@
               </div>
             </div>
           </div>
-          <div class="col-lg-6">
+          <div class="col-lg-4">
             <div class="card mb-3">
-              <h5 class="card-header">Member Source&rarr;Destination Pairs</h5>
+              <h5 class="card-header">Member Source&rarr;Destination</h5>
               <div class="card-body">
                 <div id="toppairs" class="trend"></div>
               </div>
@@ -78,7 +71,7 @@
           </div>
         </div>
         <div class="row">
-          <div class="col-lg-6">
+          <div class="col-lg-4">
             <div class="card mb-3">
               <h5 class="card-header">Unknown Sources</h5>
               <div class="card-body">
@@ -86,7 +79,7 @@
               </div>
             </div>
           </div>
-          <div class="col-lg-6">
+          <div class="col-lg-4">
             <div class="card mb-3">
               <h5 class="card-header">Unknown Destinations</h5>
               <div class="card-body">
@@ -94,9 +87,25 @@
               </div>
             </div>
           </div>
+          <div class="col-lg-4">
+            <div class="card mb-3">
+              <h5 class="card-header">Non-Unicast Packets</h5>
+              <div class="card-body">
+                <div id="topnucast" class="trend"></div>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="row">
-          <div class="col-lg-6">
+          <div class="col-lg-4">
+            <div class="card mb-3">
+              <h5 class="card-header">Protocols</h5>
+              <div class="card-body">
+                <div id="topprotos" class="trend"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-4">
             <div class="card mb-3">
               <h5 class="card-header">Packet Sizes</h5>
               <div class="card-body">
@@ -104,7 +113,7 @@
               </div>
             </div>
           </div>
-          <div class="col-lg-6">
+          <div class="col-lg-4">
             <div class="card mb-3">
               <h5 class="card-header">BGP</h5>
               <div class="card-body">
@@ -112,6 +121,28 @@
               </div>
             </div>
           </div>
+        </div>
+      </section>
+      <section id="query">
+        <form id="locateForm">
+          <div class="form-row">
+            <div class="col-sm-10 mb-3">
+              <input type="text" class="typeahead form-control" id="member_search" placeholder="Enter MAC, ASN, or name">
+              <div class="invalid-feedback">Cannot locate</div>
+            </div>
+            <div class="col-sm-2 mb-3">
+              <button id="submit" type="submit" class="btn btn-primary btn-block">Submit</button>
+            </div>
+          </div>
+        </form>
+        <div class="text-nowrap table-responsive" id="location">
+          <table class="table table-sm table-striped table-bordered">
+            <thead class="thead-light">
+              <tr><th>Node</th><th>Port</th><th>MAC</th><th>VLAN</th><th>ASN</th><th>Name</th></tr>
+            </thead>
+            <tbody>
+            </tbody>
+          </table>
         </div>
       </section>
       <section id="settings">
@@ -150,10 +181,13 @@ http://localhost:8008/app/ixp-metrics/scripts/metrics.js/members/json</code></pr
           <li><strong>Member Pairs</strong> Top member to member flows.</li>
           <li><strong>Unknown Sources</strong> Top source MAC addresses that cannot be mapped to members.</li>
           <li><strong>Unknown Destinations</strong> Top destination MAC addresses that cannot be mapped to members.</li>
+          <li><strong>Non-Unicast Packets</strong> Total broadcast and multicast packets received on edge ports.</li>
           <li><strong>Packet Sizes</strong> Packet size distribution.</li>
           <li><strong>BGP</strong> Number of member to member BGP connections.</li>
         </ul>
         <p><strong>Note</strong> Click on peaks in the charts to see values at that time.</p>
+        <h4>Locate</h4>
+        <p>Enter a MAC address, ASN, or name and locate to switch ports.</p>
         <h4>REST API</h4>
         <p>The IX Metrics user interface is built on a set of REST API calls that can be used to configure the software and retrieve data.</p>
         <table class="table table-striped table-bordered table-sm table-responsive-md">
