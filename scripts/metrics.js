@@ -398,10 +398,6 @@ function prometheus() {
   result += prometheus_prefix+'bps_total{direction="in"} '+(points['bps_in'] || 0)+'\n';
   result += prometheus_prefix+'bps_total{direction="out"} '+(points['bps_out'] || 0)+'\n';
 
-  // Total traffic in/out based on packet samples
-  result += prometheus_prefix+'bps '+(points['bps'] || 0)+'\n';
-  result += prometheus_prefix+'fps '+(points['fps'] || 0)+'\n';
-
   // Protocols
   var prots = points['top-5-protocol'] || {};
   result += prometheus_prefix+'bps{ethtype="IPv4"} '+(prots['2048'] || 0)+'\n';
