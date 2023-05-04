@@ -1,6 +1,6 @@
 // author: InMon Corp.
 // version: 1.2
-// date: 4/27/2023
+// date: 5/3/2023
 // description: Internet Exchange Provider (IXP) Metrics
 // copyright: Copyright (c) 2021-2023 InMon Corp. ALL RIGHTS RESERVED
 
@@ -41,25 +41,20 @@ function updateMemberInfo() {
 
   if(!members.member_list || members.member_list.length === 0) return;
 
-  for(i = 0; i < members.member_list.length; i++) {
-    member = members.member_list[i];
-    if(!member) continue;
+  members.member_list.forEach(function(member) {
     asn = member.asnum;
-    if(!asn) continue;
+    if(!asn) return;
     name = member.name;
-    if(!name) continue;
+    if(!name) return;
     rec = asn.toString() + SEP + name;
     macs = [];
     ips = [];
     conns = member.connection_list;
-    if(!conns) continue;
-    for(j = 0; j < conns.length; j++) {
-      conn = conns[j];
+    if(!conns) return;
+    conns.forEach(function(conn) {
       vlan_list = conn.vlan_list;
-      if(!vlan_list) continue;
-      for(var k = 0; k < vlan_list.length; k++) {
-        vlan = vlan_list[k];
-        if(!vlan) continue;
+      if(!vlan_list) return;
+      vlan_list.forEach(function(vlan) {
         if(vlan.ipv4) {
           if(vlan.ipv4.address) ips.push(vlan.ipv4.address);
           if(vlan.ipv4.mac_addresses) macs = macs.concat(vlan.ipv4.mac_addresses);
@@ -69,15 +64,14 @@ function updateMemberInfo() {
           if(vlan.ipv6.mac_addresses) macs = macs.concat(vlan.ipv6.mac_addresses);
         }
         macs = macs.filter((mac,idx,arr) => arr.indexOf(mac) === idx && 'UNKNOWN' !== mac).map(mac => mac.replace(/:/g,'').toUpperCase());
-        for(var m = 0; m < macs.length; m++) {
-          let mac = macs[m];
+        macs.forEach(function(mac) {
           macToMember[mac] = rec;
-        }
-      }
-    }
+        });
+      });
+    });
     if(ips.length > 0) memberToIP[rec] = ips;
     if(macs.length > 0) memberToMac[rec] = macs;
-  }
+  });
   setGroups('ixp_member',memberToIP);
   setMap('ixp_member',memberToMac);
 }
@@ -235,11 +229,11 @@ function calculateTopN(metric,n,minVal,total_bps) {
   var topN = {};
   if(top) {
     total = 0;
-    for(i in top) {
-      bps = top[i].value * 8;
-      topN[top[i].key] = bps;
+    top.forEach(function(entry) {
+      bps = entry.value * 8;
+      topN[entry.key] = bps;
       total += bps;
-    }
+    });
     if(total_bps > total) topN[other] = total_bps - total;
   }
   return topN;
@@ -249,13 +243,13 @@ function calculateTopInterface(metric,n) {
   var top = table('TOPOLOGY','sort:'+metric+':-'+n);
   var topN = {};
   if(top) {
-    for(var i = 0; i < top.length; i++) {
-      var val = top[i][0];
+    top.forEach(function(entry) {
+      var val = entry[0];
       var port = topologyInterfaceToPort(val.agent,val.dataSource);
       if(port && port.node && port.port) {
         topN[port.node + SEP + port.port] = val.metricValue; 
       }
-    }
+    });
   }
   return topN; 
 }
@@ -313,10 +307,10 @@ setIntervalHandler(function(now) {
   var ix0=0,ix64=0,ix65=0,ix128=0,ix256=0,ix512=0,ix1024=0,ix1518=0,ix1519=0,sum=0;
   var res = activeFlows('TOPOLOGY','ixp_pktsize',9,0,'edge');
   if(res) {
-    for(var i = 0; i < res.length; i++) {
-      var value = res[i].value;
+    res.forEach(function(entry) {
+      var value = entry.value;
       sum += value;
-      switch(res[i].key) {
+      switch(entry.key) {
       case 'true,false,false,false,false,false,false,false,false': ix0=value; break;
       case 'false,true,false,false,false,false,false,false,false': ix64=value; break;
       case 'false,false,true,false,false,false,false,false,false': ix65=value; break;
@@ -327,7 +321,7 @@ setIntervalHandler(function(now) {
       case 'false,false,false,false,false,false,false,true,false': ix1518=value; break;
       case 'false,false,false,false,false,false,false,false,true': ix1519=value; break;
       }
-    }
+    });
   }  
   var scale = sum ? 100 / sum : 0;
   points['dist-0-63'] = ix0 * scale;
@@ -417,12 +411,12 @@ function prometheus() {
 
   // Member traffic matrix
   var rows = activeFlows('TOPOLOGY','ixp_pair',MAX_MEMBERS,MIN_VAL,'edge') || [];
-  for(var i = 0; i < rows.length; i++) {
-    let [src_asn,src_name,dst_asn,dst_name] = rows[i].key.split(SEP);
+  rows.forEach(function(row) {
+    let [src_asn,src_name,dst_asn,dst_name] = row.key.split(SEP);
     src_name = prometheusName(src_name);
     dst_name = prometheusName(dst_name);
-    result += prometheus_prefix+'peering_bps{src_asn="'+src_asn+'",src_name="'+src_name+'",dst_asn="'+dst_asn+'",dst_name="'+dst_name+'"} '+(rows[i].value*8)+'\n';
-  }
+    result += prometheus_prefix+'peering_bps{src_asn="'+src_asn+'",src_name="'+src_name+'",dst_asn="'+dst_asn+'",dst_name="'+dst_name+'"} '+(row.value*8)+'\n';
+  });
 
   return result;
 }
@@ -430,17 +424,18 @@ function prometheus() {
 function memberCounters(name,n) {
   var result = [];
   var rows = table('EDGE','sort:'+name+':-'+n);
-  for(i = 0; i < rows.length; i++) {
-    var row = rows[i][0];
-    if(!row.metricValue) break;
-    var entry = {agent:row.agent,ifindex:row.dataSource,value:row.metricValue};
-    var port = topologyInterfaceToPort(row.agent,row.dataSource);
+  rows.every(function(row) {
+    var metric = row[0];
+    if(!metric.metricValue) return false;
+    var entry = {agent:metric.agent,ifindex:metric.dataSource,value:metric.metricValue};
+    var port = topologyInterfaceToPort(metric.agent,metric.dataSource);
     if(port) {
       entry.node = port.node;
       entry.port = port.port; 
     }
     result.push(entry);
-  }
+    return true;
+  });
   return result;
 }
 
@@ -474,7 +469,7 @@ function memberLocations(find_mac,find_asn,find_name) {
 }
 
 setHttpHandler(function(req) {
-  var result, i, rows, mems, path = req.path;
+  var result, rows, path = req.path;
   if(!path || path.length == 0) throw "not_found";
   if(path.length === 1 && 'txt' === req.format) {
     return prometheus();
@@ -498,10 +493,10 @@ setHttpHandler(function(req) {
       if(path.length > 1) throw "not_found";
       result = [];
       rows = activeFlows('TOPOLOGY','ixp_pair',MAX_MEMBERS,MIN_VAL,'edge') || [];
-      for(i = 0; i < rows.length; i++) {
-        let [src_asn,src_name,dst_asn,dst_name] = rows[i].key.split(SEP);
-        result.push({src_asn:src_asn,src_name:src_name,dst_asn:dst_asn,dst_name:dst_name,bps:rows[i].value*8});
-      }
+      rows.forEach(function(row) {
+        let [src_asn,src_name,dst_asn,dst_name] = row.key.split(SEP);
+        result.push({src_asn:src_asn,src_name:src_name,dst_asn:dst_asn,dst_name:dst_name,bps:row.value*8});
+      });
       break;
     case 'bgp':
       result = [];
@@ -512,18 +507,18 @@ setHttpHandler(function(req) {
     case 'arp':
        result = [];
        rows = activeFlows('TOPOLOGY','ixp_arp',100,MIN_VAL,'edge') || [];
-       for(i = 0; i < rows.length; i++) {
-         let [macsource,macdestination,arpoperation,arpipsender,arpiptarget] = rows[i].key.split(SEP);
-         result.push({smac:macsource,dmac:macdestination,op:arpoperation,sender:arpipsender,target:arpiptarget,fps:rows[i].value});
-       }
+       rows.forEach(function(row) {
+         let [macsource,macdestination,arpoperation,arpipsender,arpiptarget] = row.key.split(SEP);
+         result.push({smac:macsource,dmac:macdestination,op:arpoperation,sender:arpipsender,target:arpiptarget,fps:row.value});
+       });
        break;
     case 'nunicast':
        result = [];
        rows = activeFlows('TOPOLOGY','ixp_nunicast',100,MIN_VAL,'edge') || [];
-       for(i = 0; i < rows.length; i++) {
-         let [macsource,macdestination,ethernetprotocol] = rows[i].key.split(SEP);
-         result.push({smac:macsource,dmac:macdestination,ethtype:ethernetprotocol,fps:rows[i].value});
-       }
+       rows.forEach(function(row) {
+         let [macsource,macdestination,ethernetprotocol] = row.key.split(SEP);
+         result.push({smac:macsource,dmac:macdestination,ethtype:ethernetprotocol,fps:row.value});
+       });
        break;
     case 'multicast':
        result = memberCounters('ifinmulticastpkts',10);;
