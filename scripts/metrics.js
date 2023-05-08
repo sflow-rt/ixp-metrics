@@ -224,7 +224,7 @@ setFlow('ixp_nunicast', {
 
 // Spoofed
 setFlow('ixp_spoof', {
-  keys:'group:ipsource:ixp_spoof,macsource,ipsource',
+  keys:'group:ipsource:ixp_spoof,macsource,ipsource,macdestination',
   filter:EDGE_FILTER+'&first:stack:.:ip:ip6=ip',
   value:'frames',
   t:T,
@@ -294,7 +294,7 @@ function ageBGP(now) {
 
 var spoofing = {};
 var spoofing_examples_max = 15;
-function updateSpoofing(now,group,mac,ip) {
+function updateSpoofing(now,group,mac,ip,dmac) {
   var entry = spoofing[mac];
   if(!entry) {
     entry = {examples:[]};
@@ -302,9 +302,9 @@ function updateSpoofing(now,group,mac,ip) {
   }
   entry.lastUpdate = now;
   var examples = entry.examples;
-  var idx = examples.findIndex(ex => ex.group === group && ex.ip === ip);
+  var idx = examples.findIndex(ex => ex.group === group && ex.ip === ip && ex.dmac === dmac);
   if(idx === -1) {
-    examples.push({"group":group,"ip":ip, lastUpdate:now});
+    examples.push({group:group,ip:ip,dmac:dmac,lastUpdate:now});
     if(examples.length > spoofing_examples_max) {
       examples.shift();
     }
@@ -430,8 +430,8 @@ setFlowHandler(function(flow) {
     }
     break;
   case 'ixp_spoof':
-    let [spoof_group,spoof_mac,spoof_ip] = flow.flowKeys.split(SEP);
-    updateSpoofing(flow.start,spoof_group,spoof_mac,spoof_ip);
+    let [spoof_group,spoof_smac,spoof_sip,spoof_dmac] = flow.flowKeys.split(SEP);
+    updateSpoofing(flow.start,spoof_group,spoof_smac,spoof_sip,spoof_dmac);
     break;
   }
 },['ixp_badprotocol','ixp_ip4','ixp_ip6','ixp_bgp','ixp_bgp6','ixp_spoof']);
@@ -500,10 +500,10 @@ function memberLocations(find_mac,find_asn,find_name) {
   var locations = [];
   var macs = find_mac || topologyLocatedHostMacs();
   if(!macs) return locations;
-  macs.every(function(mac) {
+  macs.forEach(function(mac) {
     var locs = topologyLocateHostMac(mac);
-    if(!locs) return false;
-    locs.every(function(loc) {
+    if(!locs) return;
+    locs.forEach(function(loc) {
       var entry = {};
       entry.mac = mac;
       entry['ouiname'] = loc.ouiname || '';
@@ -517,14 +517,32 @@ function memberLocations(find_mac,find_asn,find_name) {
         entry['asn'] = asn;
         entry['name'] = name;
       }
-      if(find_asn && !find_asn.includes(entry.asn || '')) return false;
-      if(find_name && !find_name.some((val) => (entry.name || '').toLowerCase().indexOf(val.toLowerCase()) >= 0)) return false;
+      if(find_asn && !find_asn.includes(entry.asn || '')) return;
+      if(find_name && !find_name.some((name) => (entry.name || '').toLowerCase().indexOf(name.toLowerCase()) >= 0)) return;
       locations.push(entry);
-      return true;
     });
-    return true;
   });
   return locations;
+}
+
+function spoofedTraffic(find_mac,find_asn,find_name) {
+  var result = [];
+  Object.entries(spoofing).forEach(function(entry) {
+    var [mac,val] = entry;
+    var rec = {lastUpdate:val.lastUpdate,mac:mac,examples:val.examples};
+    var  member = macToMember[mac] || learnedMacToMember[mac];
+    if(member) {
+      let [asn,name] = member.split(SEP);
+      rec['asn'] = asn;
+      rec['name'] = name;
+    }
+    if(find_mac && !find_mac.includes(mac)) return;
+    if(find_asn && !find_asn.includes(rec.asn || '')) return;
+    if(find_name && !find_name.some((nm) => (rec.name || '').toLowerCase().indexOf(nm.toLowerCase()) >= 0)) return;
+    result.push(rec);
+  });
+  result.sort((e1,e2) => e1.lastUpdate - e2.lastUpdate);
+  return result;
 }
 
 setHttpHandler(function(req) {
@@ -589,19 +607,7 @@ setHttpHandler(function(req) {
        result = memberLocations(req.query['mac'],req.query['asn'],req.query['name']);
        break;
     case 'spoofing':
-      result = [];
-      Object.entries(spoofing).forEach(function(entry) {
-        let [mac,val] = entry;
-        let rec = {lastUpdate:val.lastUpdate,mac:mac,examples:val.examples};
-        let member = macToMember[mac] || learnedMacToMember[mac];
-        if(member) {
-          let [asn,name] = member.split(SEP);
-          rec['asn'] = asn; 
-          rec['name'] = name;
-        }
-        result.push(rec);
-      });
-      result.sort((e1,e2) => e1.lastUpdate - e2.lastUpdate);
+      result = spoofedTraffic(req.query['mac'],req.query['asn'],req.query['name']);
       break;
     case 'members':
       switch(req.method) {
