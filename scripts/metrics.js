@@ -1,6 +1,6 @@
 // author: InMon Corp.
-// version: 1.2
-// date: 5/3/2023
+// version: 1.3
+// date: 5/8/2023
 // description: Internet Exchange Provider (IXP) Metrics
 // copyright: Copyright (c) 2021-2023 InMon Corp. ALL RIGHTS RESERVED
 
@@ -18,6 +18,14 @@ var SEVERITY = getSystemProperty("ixp.syslog.severity") || 5;  // notice
 var TOP_N = 5;
 var MIN_VAL = 1;
 var SEP = '_SEP_';
+
+var SPOOFED = {
+ "RFC1700": ["0.0.0.0/8","127.0.0.0/8","240.0.0.0/4"],
+ "RFC1918": ["10.0.0.0/8","172.16.0.0/12","192.168.0.0/16"],
+ "RFC5737": ["192.0.2.0/24","198.51.100.0/24","203.0.113.0/24"],
+ "LINK_LOCAL": ["168.254.0.0/16"]
+};
+setGroups('ixp_spoof',SPOOFED);
 
 function sendWarning(msg) {
   if(SYSLOG_HOST) syslog(SYSLOG_HOST,SYSLOG_PORT,FACILITY,SEVERITY,msg);
@@ -197,14 +205,6 @@ setFlow('ixp_badprotocol', {
 });
 
 // BUM
-setFlow('ixp_nunicast', {
-  keys:'macsource,macdestination,ethernetprotocol',
-  filter:'isbroadcast=true|ismulticast=true',
-  value:'frames',
-  n:TOP_N,
-  t:T,
-  fs:SEP
-});
 // t=600 since these should be rare
 setFlow('ixp_arp', {
   keys:'macsource,macdestination,arpoperation,arpipsender,arpiptarget',
@@ -220,6 +220,17 @@ setFlow('ixp_nunicast', {
   n:20,
   t:600,
   fs:SEP
+});
+
+// Spoofed
+setFlow('ixp_spoof', {
+  keys:'group:ipsource:ixp_spoof,macsource,ipsource',
+  filter:EDGE_FILTER+'&first:stack:.:ip:ip6=ip',
+  value:'frames',
+  t:T,
+  fs:SEP,
+  log:true,
+  flowStart:true
 });
 
 var other = '-other-';
@@ -273,11 +284,52 @@ function ageBGP(now) {
   if(now - bgpLastSweep < bgpSweepInterval) return;
   bgpLastSweep = now;
 
-  for(var key in bgp) {
-    if(now - bgp[key].lastUpdate > bgpAgingMs) {
+  Object.entries(bgp).forEach(function(entry) {
+    var [key,value] = entry;
+    if(now - value.lastUpdate > bgpAgingMs) {
       delete bgp[key];
     }
+  });
+}
+
+var spoofing = {};
+var spoofing_examples_max = 15;
+function updateSpoofing(now,group,mac,ip) {
+  var entry = spoofing[mac];
+  if(!entry) {
+    entry = {examples:[]};
+    spoofing[mac] = entry;
   }
+  entry.lastUpdate = now;
+  var examples = entry.examples;
+  var idx = examples.findIndex(ex => ex.group === group && ex.ip === ip);
+  if(idx === -1) {
+    examples.push({"group":group,"ip":ip, lastUpdate:now});
+    if(examples.length > spoofing_examples_max) {
+      examples.shift();
+    }
+  } else {
+    ex = examples[idx];
+    ex.lastupdate = now;
+    examples.splice(idx,1);
+    examples.push(ex);
+  }
+}
+
+var spoofLastSweep = 0;
+var spoofSweepInterval = 60 * 60 * 1000;
+var spoofAgingMs = 7 * 24 * 60 * 60 * 1000;
+function ageSpoof(now) {
+  if(now - spoofLastSweep < spoofSweepInterval) return;
+
+  Object.entries(spoofing).forEach(function(entry) {
+    var [key,value] = entry;
+    if(now - value.lastUpdate > spoofAgingMs) {
+      delete spoofing[key];
+    } else {
+      value.examples = value.examples.filter(example => now - example.lastUpdate < spoofAgingMs);
+    }
+  });
 }
 
 setIntervalHandler(function(now) {
@@ -337,6 +389,7 @@ setIntervalHandler(function(now) {
   trend.addPoints(now,points);
 
   ageBGP(now);
+  ageSpoof(now);
 },1);
 
 setFlowHandler(function(flow) {
@@ -376,8 +429,12 @@ setFlowHandler(function(flow) {
       };
     }
     break;
+  case 'ixp_spoof':
+    let [spoof_group,spoof_mac,spoof_ip] = flow.flowKeys.split(SEP);
+    updateSpoofing(flow.start,spoof_group,spoof_mac,spoof_ip);
+    break;
   }
-},['ixp_badprotocol','ixp_ip4','ixp_ip6','ixp_bgp','ixp_bgp6']);
+},['ixp_badprotocol','ixp_ip4','ixp_ip6','ixp_bgp','ixp_bgp6','ixp_spoof']);
 
 const prometheus_prefix = (getSystemProperty("prometheus.metric.prefix") || 'sflow_') + 'ixp_';
 
@@ -443,10 +500,10 @@ function memberLocations(find_mac,find_asn,find_name) {
   var locations = [];
   var macs = find_mac || topologyLocatedHostMacs();
   if(!macs) return locations;
-  for each (var mac in macs) {
+  macs.every(function(mac) {
     var locs = topologyLocateHostMac(mac);
-    if(!locs) continue;
-    for each (var loc in locs) {
+    if(!locs) return false;
+    locs.every(function(loc) {
       var entry = {};
       entry.mac = mac;
       entry['ouiname'] = loc.ouiname || '';
@@ -460,11 +517,13 @@ function memberLocations(find_mac,find_asn,find_name) {
         entry['asn'] = asn;
         entry['name'] = name;
       }
-      if(find_asn && !find_asn.includes(entry.asn || '')) continue;
-      if(find_name && !find_name.some((val) => (entry.name || '').toLowerCase().indexOf(val.toLowerCase()) >= 0)) continue;
+      if(find_asn && !find_asn.includes(entry.asn || '')) return false;
+      if(find_name && !find_name.some((val) => (entry.name || '').toLowerCase().indexOf(val.toLowerCase()) >= 0)) return false;
       locations.push(entry);
-    }
-  }
+      return true;
+    });
+    return true;
+  });
   return locations;
 }
 
@@ -500,9 +559,9 @@ setHttpHandler(function(req) {
       break;
     case 'bgp':
       result = [];
-      for(key in bgp) {
-        result.push(bgp[key]);
-      }
+      Object.values(bgp).forEach(function(val) {
+        result.push(val);
+      });
       break;
     case 'arp':
        result = [];
@@ -529,6 +588,21 @@ setHttpHandler(function(req) {
     case 'locations':
        result = memberLocations(req.query['mac'],req.query['asn'],req.query['name']);
        break;
+    case 'spoofing':
+      result = [];
+      Object.entries(spoofing).forEach(function(entry) {
+        let [mac,val] = entry;
+        let rec = {lastUpdate:val.lastUpdate,mac:mac,examples:val.examples};
+        let member = macToMember[mac] || learnedMacToMember[mac];
+        if(member) {
+          let [asn,name] = member.split(SEP);
+          rec['asn'] = asn; 
+          rec['name'] = name;
+        }
+        result.push(rec);
+      });
+      result.sort((e1,e2) => e1.lastUpdate - e2.lastUpdate);
+      break;
     case 'members':
       switch(req.method) {
         case 'POST':
