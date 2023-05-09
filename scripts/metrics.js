@@ -507,9 +507,16 @@ function memberLocations(find_mac,find_asn,find_name) {
       var entry = {};
       entry.mac = mac;
       entry['ouiname'] = loc.ouiname || '';
-      entry['node'] = loc.node || loc.agent;
-      entry['port'] = loc.port || loc.ifindex;
       entry['vlan'] = loc.vlan || '';
+      if(loc.agg_attachedaggid) {
+        // this is a member of a LAG, report LAG port
+        let agg_port = topologyInterfacetoPort(loc.agent,loc.agg_attachedaggid);
+        entry['node'] = (agg_port && agg_port.node) || log.agent;
+        entry['port'] = (agg_port && agg_port.port) || loc.agg_attachedaggid;
+      } else { 
+        entry['node'] = loc.node || loc.agent;
+        entry['port'] = loc.port || loc.ifindex;
+      }
 
       var member = macToMember[mac] || learnedMacToMember[mac];
       if(member) {
