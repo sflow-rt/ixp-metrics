@@ -31,13 +31,13 @@ function sendWarning(msg) {
 }
 
 function parseBogonGroup(body) {
-  result = [];
-  if(!body) return result;
+  if(!bogon_groups) return;
+  if(!body) return;
   body.split('\n').forEach(function(row) {
     if(row.startsWith('#')) return;
-    result.push(row.trim());
+    var group = row.trim();
+    bogon_groups[group] = [group];
   });
-  return result;
 }
 
 var bogon_groups;
@@ -50,7 +50,7 @@ function updateBogonGroups() {
     error: (res) => logWarning('http error ' + res.status + ', ' + res.url),
     success: (res) => {
       logInfo('ixp-monitor retrieved ' + res.url);
-      bogon_groups['cymru-full-ipv4'] = parseBogonGroup(res.body);
+      parseBogonGroup(res.body);
       updateBogonGroups6();
     }
   });
@@ -63,7 +63,7 @@ function updateBogonGroups6() {
     error: (res) => logWarning('http error ' + res.status + ', ' + res.url),
     success: (res) => {
       logInfo('ixp-monitor retrieved ' + res.url);
-      bogon_groups['cymru-full-ipv6'] = parseBogonGroup(res.body);
+      parseBogonGroup(res.body);
       setGroups('ixp_bogon',bogon_groups);
       storeSet('bogons',bogon_groups);
     }
