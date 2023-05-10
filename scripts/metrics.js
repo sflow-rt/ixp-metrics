@@ -1,6 +1,6 @@
 // author: InMon Corp.
-// version: 1.3
-// date: 5/8/2023
+// version: 1.4
+// date: 5/9/2023
 // description: Internet Exchange Provider (IXP) Metrics
 // copyright: Copyright (c) 2021-2023 InMon Corp. ALL RIGHTS RESERVED
 
@@ -14,22 +14,67 @@ var SYSLOG_HOST = getSystemProperty("ixp.syslog.host");
 var SYSLOG_PORT = getSystemProperty("ixp.syslog.port") || 514;
 var FACILITY = getSystemProperty("ixp.syslog.facility") || 16; // local0
 var SEVERITY = getSystemProperty("ixp.syslog.severity") || 5;  // notice
+var BOGONS = (getSystemProperty('ixp.bogons') || 'no') === 'yes';
 
 var TOP_N = 5;
 var MIN_VAL = 1;
 var SEP = '_SEP_';
 
-var SPOOFED = {
- "RFC1700": ["0.0.0.0/8","127.0.0.0/8","240.0.0.0/4"],
- "RFC1918": ["10.0.0.0/8","172.16.0.0/12","192.168.0.0/16"],
- "RFC5737": ["192.0.2.0/24","198.51.100.0/24","203.0.113.0/24"],
- "LINK_LOCAL": ["168.254.0.0/16"]
-};
-setGroups('ixp_spoof',SPOOFED);
-
 function sendWarning(msg) {
-  if(SYSLOG_HOST) syslog(SYSLOG_HOST,SYSLOG_PORT,FACILITY,SEVERITY,msg);
-  else logWarning(JSON.stringify(msg));
+  if(SYSLOG_HOST) {
+    try {
+      syslog(SYSLOG_HOST,SYSLOG_PORT,FACILITY,SEVERITY,msg);
+    } catch(e) {
+      logWarning('ixp-monitor cannot send syslog to ' + SYSLOG_HOST);
+    }
+  } else logWarning(JSON.stringify(msg));
+}
+
+function parseBogonGroup(body) {
+  result = [];
+  if(!body) return result;
+  body.split('\n').forEach(function(row) {
+    if(row.startsWith('#')) return;
+    result.push(row.trim());
+  });
+  return result;
+}
+
+var bogon_groups;
+function updateBogonGroups() {
+  bogon_groups = {};
+  httpAsync({
+    url:'https://team-cymru.org/Services/Bogons/fullbogons-ipv4.txt',
+    headers:{'Accept':'text/plain'},
+    operation:'GET',
+    error: (res) => logWarning('http error ' + res.status + ', ' + res.url),
+    success: (res) => {
+      logInfo('ixp-monitor retrieved ' + res.url);
+      bogon_groups['cymru-full-ipv4'] = parseBogonGroup(res.body);
+      updateBogonGroups6();
+    }
+  });
+}
+function updateBogonGroups6() {
+  httpAsync({
+    url:'https://team-cymru.org/Services/Bogons/fullbogons-ipv6.txt',
+    headers:{'Accept':'text/plain'},
+    operation:'GET',
+    error: (res) => logWarning('http error ' + res.status + ', ' + res.url),
+    success: (res) => {
+      logInfo('ixp-monitor retrieved ' + res.url);
+      bogon_groups['cymru-full-ipv6'] = parseBogonGroup(res.body);
+      setGroups('ixp_bogon',bogon_groups);
+      storeSet('bogons',bogon_groups);
+    }
+  });
+}
+
+if(BOGONS) {
+  logInfo('ixp-monitor bogon monitoring enabled');
+  bogon_groups = storeGet('bogons');
+  if(bogon_groups) setGroups('ixp_bogon',bogon_groups);
+  else updateBogonGroups();
 }
 
 var trend = new Trend(300,1);
@@ -222,16 +267,27 @@ setFlow('ixp_nunicast', {
   fs:SEP
 });
 
-// Spoofed
-setFlow('ixp_spoof', {
-  keys:'group:ipsource:ixp_spoof,macsource,ipsource,macdestination',
-  filter:EDGE_FILTER+'&first:stack:.:ip:ip6=ip',
-  value:'frames',
-  t:T,
-  fs:SEP,
-  log:true,
-  flowStart:true
-});
+// Bogons
+if(BOGONS) {
+  setFlow('ixp_bogon', {
+    keys:'group:ipsource:ixp_bogon,macsource,ipsource,macdestination',
+    filter:EDGE_FILTER+'&first:stack:.:ip:ip6=ip',
+    value:'frames',
+    t:T,
+    fs:SEP,
+    log:true,
+    flowStart:true
+  });
+  setFlow('ixp_bogon6', {
+    keys:'group:ip6source:ixp_bogon,macsource,ip6source,macdestination',
+    filter:EDGE_FILTER+'&first:stack:.:ip:ip6=ip6',
+    value:'frames',
+    t:T,
+    fs:SEP,
+    log:true,
+    flowStart:true
+  });
+}
 
 var other = '-other-';
 function calculateTopN(metric,n,minVal,total_bps) {     
@@ -292,20 +348,20 @@ function ageBGP(now) {
   });
 }
 
-var spoofing = {};
-var spoofing_examples_max = 15;
-function updateSpoofing(now,group,mac,ip,dmac) {
-  var entry = spoofing[mac];
+var bogons = {};
+var bogon_examples_max = 15;
+function updateBogons(now,group,mac,ip,dmac) {
+  var entry = bogons[mac];
   if(!entry) {
     entry = {examples:[]};
-    spoofing[mac] = entry;
+    bogons[mac] = entry;
   }
   entry.lastUpdate = now;
   var examples = entry.examples;
   var idx = examples.findIndex(ex => ex.group === group && ex.ip === ip && ex.dmac === dmac);
   if(idx === -1) {
     examples.push({group:group,ip:ip,dmac:dmac,lastUpdate:now});
-    if(examples.length > spoofing_examples_max) {
+    if(examples.length > bogon_examples_max) {
       examples.shift();
     }
   } else {
@@ -316,20 +372,30 @@ function updateSpoofing(now,group,mac,ip,dmac) {
   }
 }
 
-var spoofLastSweep = 0;
-var spoofSweepInterval = 60 * 60 * 1000;
-var spoofAgingMs = 7 * 24 * 60 * 60 * 1000;
-function ageSpoof(now) {
-  if(now - spoofLastSweep < spoofSweepInterval) return;
+var bogonsLastSweep = 0;
+var bogonsSweepInterval = 60 * 60 * 1000;
+var bogonsAgingMs = 7 * 24 * 60 * 60 * 1000;
+var bogonsLastUpdate = 0;
+var bogonsUpdateInterval = 24 * 60 * 60 * 1000;
+function ageBogons(now) {
+  if(bogonsLastSweep === 0) bogonsLastSweep = now;
+  if(bogonsLastUpdate === 0) bogonsLastUpdate = now;
+  if(now - bogonsLastSweep < bogonsSweepInterval) return;
+  bogonsLastSweep = now;
 
-  Object.entries(spoofing).forEach(function(entry) {
+  Object.entries(bogons).forEach(function(entry) {
     var [key,value] = entry;
-    if(now - value.lastUpdate > spoofAgingMs) {
-      delete spoofing[key];
+    if(now - value.lastUpdate > bogonsAgingMs) {
+      delete bogons[key];
     } else {
-      value.examples = value.examples.filter(example => now - example.lastUpdate < spoofAgingMs);
+      value.examples = value.examples.filter(example => now - example.lastUpdate < bogonsAgingMs);
     }
   });
+  
+  if(now - bogonsLastUpdate < bogonsUpdateInterval) return;
+  bogonsLastUpdate = now;
+  
+  updateBogonGroups(); 
 }
 
 setIntervalHandler(function(now) {
@@ -389,7 +455,7 @@ setIntervalHandler(function(now) {
   trend.addPoints(now,points);
 
   ageBGP(now);
-  ageSpoof(now);
+  if(BOGONS) ageBogons(now);
 },1);
 
 setFlowHandler(function(flow) {
@@ -429,12 +495,13 @@ setFlowHandler(function(flow) {
       };
     }
     break;
-  case 'ixp_spoof':
-    let [spoof_group,spoof_smac,spoof_sip,spoof_dmac] = flow.flowKeys.split(SEP);
-    updateSpoofing(flow.start,spoof_group,spoof_smac,spoof_sip,spoof_dmac);
+  case 'ixp_bogon':
+  case 'ixp_bogon6':
+    let [bogon_group,bogon_smac,bogon_sip,bogon_dmac] = flow.flowKeys.split(SEP);
+    updateBogons(flow.start,bogon_group,bogon_smac,bogon_sip,bogon_dmac);
     break;
   }
-},['ixp_badprotocol','ixp_ip4','ixp_ip6','ixp_bgp','ixp_bgp6','ixp_spoof']);
+},['ixp_badprotocol','ixp_ip4','ixp_ip6','ixp_bgp','ixp_bgp6','ixp_bogon','ixp_bogon6']);
 
 const prometheus_prefix = (getSystemProperty("prometheus.metric.prefix") || 'sflow_') + 'ixp_';
 
@@ -532,9 +599,9 @@ function memberLocations(find_mac,find_asn,find_name) {
   return locations;
 }
 
-function spoofedTraffic(find_mac,find_asn,find_name) {
+function bogonTraffic(find_mac,find_asn,find_name) {
   var result = [];
-  Object.entries(spoofing).forEach(function(entry) {
+  Object.entries(bogons).forEach(function(entry) {
     var [mac,val] = entry;
     var rec = {lastUpdate:val.lastUpdate,mac:mac,examples:val.examples};
     var  member = macToMember[mac] || learnedMacToMember[mac];
@@ -613,8 +680,8 @@ setHttpHandler(function(req) {
     case 'locations':
        result = memberLocations(req.query['mac'],req.query['asn'],req.query['name']);
        break;
-    case 'spoofing':
-      result = spoofedTraffic(req.query['mac'],req.query['asn'],req.query['name']);
+    case 'bogons':
+      result = bogonTraffic(req.query['mac'],req.query['asn'],req.query['name']);
       break;
     case 'members':
       switch(req.method) {
