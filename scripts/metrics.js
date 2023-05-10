@@ -1,6 +1,6 @@
 // author: InMon Corp.
 // version: 1.4
-// date: 5/9/2023
+// date: 5/10/2023
 // description: Internet Exchange Provider (IXP) Metrics
 // copyright: Copyright (c) 2021-2023 InMon Corp. ALL RIGHTS RESERVED
 
@@ -85,27 +85,26 @@ var members = storeGet('members') || {};
 var macToMember = {};
 var learnedMacToMember = {};
 function updateMemberInfo() {
-  var memberToMac,memberToIP,member,name,asn,rec,macs,ips,conns,j,conn,vlan_list,k,vlan,mac;
-
-  memberToMac = {};
-  memberToIP = {};
   macToMember = {};
   learnedMacToMember = {};
+
+  var memberToMac = {};
+  var memberToIP = {};
 
   if(!members.member_list || members.member_list.length === 0) return;
 
   members.member_list.forEach(function(member) {
-    asn = member.asnum;
+    var asn = member.asnum;
     if(!asn) return;
-    name = member.name;
+    var name = member.name;
     if(!name) return;
-    rec = asn.toString() + SEP + name;
-    macs = [];
-    ips = [];
-    conns = member.connection_list;
+    var rec = asn.toString() + SEP + name;
+    var macs = [];
+    var ips = [];
+    var conns = member.connection_list;
     if(!conns) return;
     conns.forEach(function(conn) {
-      vlan_list = conn.vlan_list;
+      var vlan_list = conn.vlan_list;
       if(!vlan_list) return;
       vlan_list.forEach(function(vlan) {
         if(vlan.ipv4) {
@@ -116,14 +115,14 @@ function updateMemberInfo() {
           if(vlan.ipv6.address) ips.push(vlan.ipv6.address);
           if(vlan.ipv6.mac_addresses) macs = macs.concat(vlan.ipv6.mac_addresses);
         }
-        macs = macs.filter((mac,idx,arr) => arr.indexOf(mac) === idx && 'UNKNOWN' !== mac).map(mac => mac.replace(/:/g,'').toUpperCase());
-        macs.forEach(function(mac) {
-          macToMember[mac] = rec;
-        });
       });
     });
-    if(ips.length > 0) memberToIP[rec] = ips;
-    if(macs.length > 0) memberToMac[rec] = macs;
+    macs = macs.filter((mac,idx,arr) => arr.indexOf(mac) === idx && 'UNKNOWN' !== mac).map(mac => mac.replace(/:/g,'').toUpperCase());
+    macs.forEach(function(mac) {
+      macToMember[mac] = rec;
+    });
+    if(ips.length > 0) memberToIP[rec] = memberToIP.hasOwnProperty(rec) ? memberToIP[rec].concat(ips) : ips;
+    if(macs.length > 0) memberToMac[rec] = memberToMac.hasOwnProperty(rec) ? memberToMac[rec].concat(macs) : macs;
   });
   setGroups('ixp_member',memberToIP);
   setMap('ixp_member',memberToMac);
@@ -291,13 +290,12 @@ if(BOGONS) {
 
 var other = '-other-';
 function calculateTopN(metric,n,minVal,total_bps) {     
-  var total, top, topN, i, bps;
-  top = activeFlows('TOPOLOGY',metric,n,minVal,'edge');
+  var top = activeFlows('TOPOLOGY',metric,n,minVal,'edge');
   var topN = {};
   if(top) {
-    total = 0;
+    var total = 0;
     top.forEach(function(entry) {
-      bps = entry.value * 8;
+      var bps = entry.value * 8;
       topN[entry.key] = bps;
       total += bps;
     });
