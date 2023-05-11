@@ -134,9 +134,10 @@ $(function() {
             rows += '<tr>';
             rows += '<td>' + (resp[i].node || '') + '</td>';
             rows += '<td>' + (resp[i].port || '') + '</td>';
+            rows += '<td class="text-right">' + (resp[i].speed ? $.inmon.stripchart.prototype.valueStr(resp[i].speed) : '') + '</td>';
             rows += '<td>' + (resp[i].mac || '') + '</td>';
-            rows += '<td>' + (resp[i].vlan || '') + '</td>';
-            rows += '<td>' + (resp[i].asn || '') + '</td>';
+            rows += '<td class="text-right">' + (resp[i].vlan || '') + '</td>';
+            rows += '<td class="text-right">' + (resp[i].asn || '') + '</td>';
             rows += '<td>' + (resp[i].name || '') + '</td>';
             rows += '</tr>';
           }

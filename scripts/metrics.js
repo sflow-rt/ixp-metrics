@@ -578,9 +578,11 @@ function memberLocations(find_mac,find_asn,find_name) {
         let agg_port = topologyInterfacetoPort(loc.agent,loc.agg_attachedaggid);
         entry['node'] = (agg_port && agg_port.node) || log.agent;
         entry['port'] = (agg_port && agg_port.port) || loc.agg_attachedaggid;
+        entry['speed'] = metric(loc.agent,loc.agg_attachedaggid+'.ifspeed')[0].metricValue || 0;
       } else { 
         entry['node'] = loc.node || loc.agent;
         entry['port'] = loc.port || loc.ifindex;
+        entry['speed'] = metric(loc.agent,loc.ifindex+'.ifspeed')[0].metricValue || 0;
       }
 
       var member = macToMember[mac] || learnedMacToMember[mac];
