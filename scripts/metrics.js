@@ -1,6 +1,6 @@
 // author: InMon Corp.
 // version: 1.4
-// date: 5/10/2023
+// date: 5/11/2023
 // description: Internet Exchange Provider (IXP) Metrics
 // copyright: Copyright (c) 2021-2023 InMon Corp. ALL RIGHTS RESERVED
 
@@ -259,7 +259,24 @@ setFlow('ixp_arp', {
 });
 setFlow('ixp_nunicast', {
   keys:'macsource,macdestination,ethernetprotocol',
-  filter:'isbroadcast=true|ismulticast=true',
+  filter:'isunicast=false',
+  value:'frames',
+  n:20,
+  t:600,
+  fs:SEP
+});
+// unknown unicast - count egress ports for mac
+setFlow('ixp_flood_vxlan', {
+  keys:'macdestination.1',
+  filter:'direction=ingress&vxlanvni!=null&link:inputifindex!=null&outputifindex=multiple&isunicast.1=true',
+  value:'frames',
+  n:20,
+  t:600,
+  fs:SEP
+});
+setFlow('ixp_flood_local', {
+  keys:'macdestination',
+  filter:'direction=ingress&vxlanvni=null&link:inputifindex=null&outputifindex=multiple&isunicast=true',
   value:'frames',
   n:20,
   t:600,
@@ -671,6 +688,17 @@ setHttpHandler(function(req) {
          result.push({smac:macsource,dmac:macdestination,ethtype:ethernetprotocol,fps:row.value});
        });
        break;
+    case 'flood':
+       result = [];
+       rows = activeFlows('TOPOLOGY','ixp_flood_vxlan',100,MIN_VAL,'sum') || [];
+       rows.concat(activeFlows('TOPOLOGY','ixp_flood_local',100,MIN_VAL,'sum') || []);
+       rows.sort((r1,r2) => r2.value - r1.value);
+       rows.length = Math.min(rows.length,100);
+       rows.forEach(function(row) {
+         let macdestination = row.key;
+         result.push({dmac:macdestination,fps:row.value});
+       });
+       break; 
     case 'multicast':
        result = memberCounters('ifinmulticastpkts',10);;
        break; 
