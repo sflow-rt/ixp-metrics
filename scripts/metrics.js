@@ -30,19 +30,17 @@ function sendWarning(msg) {
   } else logWarning(JSON.stringify(msg));
 }
 
-function parseBogonGroup(body) {
-  if(!bogon_groups) return;
-  if(!body) return;
+function parseBogonGroup(groups,body) {
+  if(!groups || !body) return;
   body.split('\n').forEach(function(row) {
     if(row.startsWith('#')) return;
     var group = row.trim();
-    bogon_groups[group] = [group];
+    groups[group] = [group];
   });
 }
 
-var bogon_groups;
 function updateBogonGroups() {
-  bogon_groups = {};
+  var groups = {};
   httpAsync({
     url:'https://team-cymru.org/Services/Bogons/fullbogons-ipv4.txt',
     headers:{'Accept':'text/plain'},
@@ -50,12 +48,12 @@ function updateBogonGroups() {
     error: (res) => logWarning('http error ' + res.status + ', ' + res.url),
     success: (res) => {
       logInfo('ixp-monitor retrieved ' + res.url);
-      parseBogonGroup(res.body);
-      updateBogonGroups6();
+      parseBogonGroup(groups,res.body);
+      updateBogonGroups6(groups);
     }
   });
 }
-function updateBogonGroups6() {
+function updateBogonGroups6(groups) {
   httpAsync({
     url:'https://team-cymru.org/Services/Bogons/fullbogons-ipv6.txt',
     headers:{'Accept':'text/plain'},
@@ -63,17 +61,17 @@ function updateBogonGroups6() {
     error: (res) => logWarning('http error ' + res.status + ', ' + res.url),
     success: (res) => {
       logInfo('ixp-monitor retrieved ' + res.url);
-      parseBogonGroup(res.body);
-      setGroups('ixp_bogon',bogon_groups);
-      storeSet('bogons',bogon_groups);
+      parseBogonGroup(groups,res.body);
+      setGroups('ixp_bogon',groups);
+      storeSet('bogons',groups);
     }
   });
 }
 
 if(BOGONS) {
   logInfo('ixp-monitor bogon monitoring enabled');
-  bogon_groups = storeGet('bogons');
-  if(bogon_groups) setGroups('ixp_bogon',bogon_groups);
+  let groups = storeGet('bogons');
+  if(groups) setGroups('ixp_bogon',groups);
   else updateBogonGroups();
 }
 
