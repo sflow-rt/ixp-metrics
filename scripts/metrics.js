@@ -10,10 +10,10 @@ var N = getSystemProperty('ixp.flow.n') || 20;
 var T = getSystemProperty('ixp.flow.t') || 15;
 var MAX_MEMBERS = getSystemProperty('ixp.members.n') || 1000;
 var ETHTYPE = getSystemProperty('ixp.allowed.ethertype') || '2048,2054,34525';
-var SYSLOG_HOST = getSystemProperty("ixp.syslog.host");
-var SYSLOG_PORT = getSystemProperty("ixp.syslog.port") || 514;
-var FACILITY = getSystemProperty("ixp.syslog.facility") || 16; // local0
-var SEVERITY = getSystemProperty("ixp.syslog.severity") || 5;  // notice
+var SYSLOG_HOST = getSystemProperty('ixp.syslog.host');
+var SYSLOG_PORT = getSystemProperty('ixp.syslog.port') || 514;
+var FACILITY = getSystemProperty('ixp.syslog.facility') || 16; // local0
+var SEVERITY = getSystemProperty('ixp.syslog.severity') || 5;  // notice
 var BOGONS = (getSystemProperty('ixp.bogons') || 'no') === 'yes';
 
 var TOP_N = 5;
@@ -270,7 +270,9 @@ setFlow('ixp_flood_vxlan', {
   value:'frames',
   n:20,
   t:600,
-  fs:SEP
+  fs:SEP,
+  log:true,
+  flowStart:true
 });
 setFlow('ixp_flood_local', {
   keys:'macdestination',
@@ -278,7 +280,9 @@ setFlow('ixp_flood_local', {
   value:'frames',
   n:20,
   t:600,
-  fs:SEP
+  fs:SEP,
+  log:true,
+  flowStart:true
 });
 
 // Bogons
@@ -481,15 +485,15 @@ setFlowHandler(function(flow) {
     if(macMem) {
       let [mac_asn,mac_name] = macMem.split(SEP);
       if(asn !== mac_asn) {
-        sendWarning({ixp_evt:"assignment", mac:mmac, assigned:mac_asn, seen:asn});
+        sendWarning({ixp_evt:'assignment', mac:mmac, assigned:mac_asn, seen:asn});
       }
     } else {
-      sendWarning({ixp_evt:"missing", mac:mmac, member:asn});
+      sendWarning({ixp_evt:'missing', mac:mmac, member:asn});
     } 
     break;
   case 'ixp_badprotocol':
     let [smac,ethtype] = flow.flowKeys.split(SEP);
-    sendWarning({ixp_evt:"protocol", "mac":smac, "ethtype":ethtype});
+    sendWarning({ixp_evt:'protocol', mac:smac, ethtype:ethtype});
     break;
   case 'ixp_bgp':
   case 'ixp_bgp6':
@@ -513,10 +517,14 @@ setFlowHandler(function(flow) {
     let [bogon_group,bogon_smac,bogon_sip,bogon_dmac] = flow.flowKeys.split(SEP);
     updateBogons(flow.start,bogon_group,bogon_smac,bogon_sip,bogon_dmac);
     break;
+  case 'ixp_flood_vxlan':
+  case 'ixp_flood_local':
+    sendWarning({ixp_evt:'flood',mac:flow.flowKeys});
+    break;
   }
-},['ixp_badprotocol','ixp_ip4','ixp_ip6','ixp_bgp','ixp_bgp6','ixp_bogon','ixp_bogon6']);
+},['ixp_badprotocol','ixp_ip4','ixp_ip6','ixp_bgp','ixp_bgp6','ixp_bogon','ixp_bogon6','ixp_flood_vxlan','ixp_flood_local']);
 
-const prometheus_prefix = (getSystemProperty("prometheus.metric.prefix") || 'sflow_') + 'ixp_';
+const prometheus_prefix = (getSystemProperty('prometheus.metric.prefix') || 'sflow_') + 'ixp_';
 
 function prometheusName(str) {
   return str.replace(/[^a-zA-Z0-9_]/g,'_');
@@ -636,27 +644,27 @@ function bogonTraffic(find_mac,find_asn,find_name) {
 
 setHttpHandler(function(req) {
   var result, rows, path = req.path;
-  if(!path || path.length == 0) throw "not_found";
+  if(!path || path.length == 0) throw 'not_found';
   if(path.length === 1 && 'txt' === req.format) {
     return prometheus();
   }
-  if('json' !== req.format) throw "not_found";
+  if('json' !== req.format) throw 'not_found';
   switch(path[0]) {
     case 'trend':
-      if(path.length > 1) throw "not_found"; 
+      if(path.length > 1) throw 'not_found'; 
       result = {};
       result.trend = req.query.after ? trend.after(parseInt(req.query.after)) : trend;
       break;
     case 'metric':
       if(path.length == 1) result = points;
       else {
-        if(path.length != 2) throw "not_found";
+        if(path.length != 2) throw 'not_found';
         if(points.hasOwnProperty(path[1])) result = points[path[1]];
-        else throw "not_found";
+        else throw 'not_found';
       }
       break;
     case 'matrix':
-      if(path.length > 1) throw "not_found";
+      if(path.length > 1) throw 'not_found';
       result = [];
       rows = activeFlows('TOPOLOGY','ixp_pair',MAX_MEMBERS,MIN_VAL,'edge') || [];
       rows.forEach(function(row) {
@@ -714,7 +722,7 @@ setHttpHandler(function(req) {
         case 'POST':
         case 'PUT':
           if(req.error || !req.body || !req.body.version || 1.0 > req.body.version) {
-            throw "bad_request";
+            throw 'bad_request';
           }
           members = req.body;
           storeSet('members',members);
@@ -724,7 +732,7 @@ setHttpHandler(function(req) {
           result = members;
           break;
         default:
-          throw "bad_request";
+          throw 'bad_request';
       }
       break;
     default: throw 'not_found';
