@@ -645,7 +645,7 @@ function bogonTraffic(find_mac,find_asn,find_name) {
 setHttpHandler(function(req) {
   var result, rows, path = req.path;
   if(!path || path.length == 0) throw 'not_found';
-  if(path.length === 1 && 'txt' === req.format) {
+  if(path.length === 1 && 'prometheus' === path[0] && 'txt' === req.format) {
     return prometheus();
   }
   if('json' !== req.format) throw 'not_found';
