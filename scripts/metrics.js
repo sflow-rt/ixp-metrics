@@ -1,6 +1,6 @@
 // author: InMon Corp.
 // version: 1.4
-// date: 5/11/2023
+// date: 5/18/2023
 // description: Internet Exchange Provider (IXP) Metrics
 // copyright: Copyright (c) 2021-2023 InMon Corp. ALL RIGHTS RESERVED
 
@@ -78,11 +78,9 @@ if(BOGONS) {
 var trend = new Trend(300,1);
 var points = {};
 
-var members = storeGet('members') || {};
-
 var macToMember = {};
 var learnedMacToMember = {};
-function updateMemberInfo() {
+function updateMemberInfo(members) {
   macToMember = {};
   learnedMacToMember = {};
 
@@ -125,7 +123,7 @@ function updateMemberInfo() {
   setGroups('ixp_member',memberToIP);
   setMap('ixp_member',memberToMac);
 }
-updateMemberInfo();
+updateMemberInfo(storeGet('members') || {});
 
 // metrics
 //EDGE_FILTER used when logging flows to select edge measurements
@@ -724,12 +722,11 @@ setHttpHandler(function(req) {
           if(req.error || !req.body || !req.body.version || 1.0 > req.body.version) {
             throw 'bad_request';
           }
-          members = req.body;
-          storeSet('members',members);
-          updateMemberInfo();
+          storeSet('members',req.body);
+          updateMemberInfo(req.body);
           break;
         case 'GET':
-          result = members;
+          result = storeGet('members') || {};
           break;
         default:
           throw 'bad_request';
