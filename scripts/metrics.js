@@ -6,10 +6,13 @@
 
 include(scriptdir() + '/inc/trend.js');
 
+// ip,arp,ipv6,lag,lldp
+var DEFAULT_ETHTYPE = '2048,2054,34525,34825,35020';
+
 var N = getSystemProperty('ixp.flow.n') || 20;
 var T = getSystemProperty('ixp.flow.t') || 15;
 var MAX_MEMBERS = getSystemProperty('ixp.members.n') || 1000;
-var ETHTYPE = getSystemProperty('ixp.allowed.ethertype') || '2048,2054,34525';
+var ETHTYPE = getSystemProperty('ixp.allowed.ethertype') || DEFAULT_ETHTYPE;
 var SYSLOG_HOST = getSystemProperty('ixp.syslog.host');
 var SYSLOG_PORT = getSystemProperty('ixp.syslog.port') || 514;
 var FACILITY = getSystemProperty('ixp.syslog.facility') || 16; // local0
