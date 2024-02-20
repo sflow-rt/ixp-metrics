@@ -1,6 +1,6 @@
 // author: InMon Corp.
-// version: 1.5
-// date: 2/19/2024
+// version: 1.6
+// date: 2/20/2024
 // description: Internet Exchange Provider (IXP) Metrics
 // copyright: Copyright (c) 2021-2023 InMon Corp. ALL RIGHTS RESERVED
 
@@ -98,6 +98,7 @@ function updateMemberInfo(members) {
 
   var memberToMac = {};
   var memberToIP = {};
+  var nextHops = {};
 
   if(!members.member_list || members.member_list.length === 0) return;
 
@@ -118,10 +119,16 @@ function updateMemberInfo(members) {
         if(vlan.ipv4) {
           if(vlan.ipv4.address) ips.push(vlan.ipv4.address);
           if(vlan.ipv4.mac_addresses) macs = macs.concat(vlan.ipv4.mac_addresses);
+          if(vlan.ipv4.address && vlan.ipv4.mac_addresses && vlan.ipv4.mac_addresses.length === 1 && 'UNKNOWN' !== vlan.ipv4.mac_addresses[0]) {
+            nextHops[vlan.ipv4.address] = vlan.ipv4.mac_addresses[0].replace(/:/g,'').toUpperCase();
+          }
         }
         if(vlan.ipv6) {
           if(vlan.ipv6.address) ips.push(vlan.ipv6.address);
           if(vlan.ipv6.mac_addresses) macs = macs.concat(vlan.ipv6.mac_addresses);
+          if(vlan.ipv6.address && vlan.ipv6.mac_addresses && vlan.ipv6.mac_addresses.length === 1 && 'UNKNOWN' !== vlan.ipv6.mac_addresses[0]) {
+            nextHops[vlan.ipv6.address] = vlan.ipv6.mac_addresses[0].replace(/:/g,'').toUpperCase();
+          }
         }
       });
     });
@@ -134,6 +141,9 @@ function updateMemberInfo(members) {
   });
   setGroups('ixp_member',memberToIP);
   setMap('ixp_member',memberToMac);
+  if(ROUTER && MULTIPATH) {
+    bgpSetNextHops(nextHops);
+  }
 }
 updateMemberInfo(storeGet('members') || {});
 
