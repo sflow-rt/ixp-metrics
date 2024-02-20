@@ -1,6 +1,6 @@
 // author: InMon Corp.
-// version: 1.4
-// date: 5/18/2023
+// version: 1.5
+// date: 2/19/2024
 // description: Internet Exchange Provider (IXP) Metrics
 // copyright: Copyright (c) 2021-2023 InMon Corp. ALL RIGHTS RESERVED
 
@@ -18,10 +18,19 @@ var SYSLOG_PORT = getSystemProperty('ixp.syslog.port') || 514;
 var FACILITY = getSystemProperty('ixp.syslog.facility') || 16; // local0
 var SEVERITY = getSystemProperty('ixp.syslog.severity') || 5;  // notice
 var BOGONS = (getSystemProperty('ixp.bogons') || 'no') === 'yes';
+var ROUTER = getSystemProperty('ixp.bgp.router');
+var ASN = getSystemProperty('ixp.bgp.as') || '65000';
+var ID = getSystemProperty('ixp.bgp.id');
+var MULTIPATH = (getSystemProperty('ixp.bgp.multipath') || 'no') === 'yes';
 
 var TOP_N = 5;
 var MIN_VAL = 1;
 var SEP = '_SEP_';
+
+if(ROUTER) {
+  bgpAddNeighbor(ROUTER,ASN,ID,{ipv6:true,multipath:MULTIPATH});
+  bgpAddSource('EDGE',ROUTER,T);
+}
 
 function sendWarning(msg) {
   if(SYSLOG_HOST) {
