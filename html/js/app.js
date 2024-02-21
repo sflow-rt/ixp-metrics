@@ -26,12 +26,21 @@ $(function() {
     e.preventDefault();
   });
 
+  $('#traffic').on('click', 'a', function(e) {
+    e.preventDefault();
+    var search = $(this).text();
+    setNav('#query');
+    $('#member_search').val(search);
+    $('#submit').click();
+  });
+
   var colors = $.inmon.stripchart.prototype.options.colors;
 
   var db = {};
 
   var ethtypes = {'2048':'IPv4', '2054':'ARP', '34525':'IPv6'};
   function printEthType(k,i) { return ethtypes[k] || '0x'+(parseInt(k).toString(16)) };
+
   $('#topsources').chart({
     type: 'topn',
     stack: true,
@@ -39,6 +48,7 @@ $(function() {
     sep: SEP,
     metric: 'top-5-memsrc',
     legendHeadings: ['ASN','Name'],
+    legendLinks: ['#',null],
     units: 'Bits per Second'},
   db);
   $('#topdestinations').chart({
@@ -48,6 +58,7 @@ $(function() {
     sep: SEP,
     metric: 'top-5-memdst',
     legendHeadings: ['ASN','Name'],
+    legendLinks: ['#',null],
     units: 'Bits per Second'},
   db);
   $('#toppairs').chart({
@@ -57,6 +68,7 @@ $(function() {
     sep: SEP,
     metric: 'top-5-mempair',
     legendHeadings: ['ASN','Name','ASN','Name'],
+    legendLinks: ['#',null,'#',null],
     units: 'Bits per Second'},
   db); 
   $('#topprotos').chart({
@@ -75,6 +87,7 @@ $(function() {
     sep: SEP,
     metric: 'top-5-memunknownsrc',
     legendHeadings: ['Src Mac'],
+    legendLinks: ['#'],
     units: 'Bits per Second'},
   db);
   $('#topunknowndst').chart({
@@ -84,6 +97,7 @@ $(function() {
     sep: SEP,
     metric: 'top-5-memunknowndst',
     legendHeadings: ['Dst Mac'],
+    legendLinks: ['#'], 
     units: 'Bits per Second'},
   db);
   $('#topnucast').chart({
