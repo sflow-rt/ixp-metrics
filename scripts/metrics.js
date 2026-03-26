@@ -1,8 +1,8 @@
 // author: InMon Corp.
-// version: 1.6
-// date: 2/20/2024
+// version: 1.7
+// date: 3/26/2026
 // description: Internet Exchange Provider (IXP) Metrics
-// copyright: Copyright (c) 2021-2023 InMon Corp. ALL RIGHTS RESERVED
+// copyright: Copyright (c) 2021-2026 InMon Corp. ALL RIGHTS RESERVED
 
 include(scriptdir() + '/inc/trend.js');
 
@@ -545,25 +545,32 @@ setFlowHandler(function(flow) {
 },['ixp_badprotocol','ixp_ip4','ixp_ip6','ixp_bgp','ixp_bgp6','ixp_bogon','ixp_bogon6','ixp_flood_vxlan','ixp_flood_local']);
 
 const prometheus_prefix = (getSystemProperty('prometheus.metric.prefix') || 'sflow_') + 'ixp_';
+const prometheus_type = getSystemProperty("prometheus.type") === 'yes';
 
 function prometheusName(str) {
   return str.replace(/[^a-zA-Z0-9_]/g,'_');
 }
 
 function prometheus() {
-  var result = prometheus_prefix+'bgp_connections ' + (points['bgp-connections'] || 0) + '\n';
+  var result = '';
+
+  if(prometheus_type) result += '# TYPE '+prometheus_prefix+'bgp_connections gauge\n';
+  result += prometheus_prefix+'bgp_connections ' + (points['bgp-connections'] || 0) + '\n';
 
   // Total traffic in/out based on counters
+  if(prometheus_type) result += '# TYPE '+prometheus_prefix+'bps_total gauge\n';
   result += prometheus_prefix+'bps_total{direction="in"} '+(points['bps_in'] || 0)+'\n';
   result += prometheus_prefix+'bps_total{direction="out"} '+(points['bps_out'] || 0)+'\n';
 
   // Protocols
+  if(prometheus_type) result += '# TYPE '+prometheus_prefix+'bps gauge\n';
   var prots = points['top-5-protocol'] || {};
   result += prometheus_prefix+'bps{ethtype="IPv4"} '+(prots['2048'] || 0)+'\n';
   result += prometheus_prefix+'bps{ethtype="IPv6"} '+(prots['34525'] || 0)+'\n';
   result += prometheus_prefix+'bps{ethtype="ARP"} '+(prots['2054'] || 0)+'\n';
 
   // Packet size distribution
+  if(prometheus_type) result += '# TYPE '+prometheus_prefix+'pktdist gauge\n';
   result += prometheus_prefix+'pktdist{bin="0",size="0-63"} '+(points['dist-0-63'] || 0)+'\n';
   result += prometheus_prefix+'pktdist{bin="1",size="64"} '+(points['dist-64'] || 0)+'\n';
   result += prometheus_prefix+'pktdist{bin="2",size="65-127"} '+(points['dist-65-127'] || 0)+'\n';
@@ -576,6 +583,7 @@ function prometheus() {
 
   // Member traffic matrix
   var rows = activeFlows('TOPOLOGY','ixp_pair',MAX_MEMBERS,MIN_VAL,'edge') || [];
+  if(prometheus_type && rows.length) result += '# TYPE '+prometheus_prefix+'peering_bps gauge\n';
   rows.forEach(function(row) {
     let [src_asn,src_name,dst_asn,dst_name] = row.key.split(SEP);
     src_name = prometheusName(src_name);

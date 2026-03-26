@@ -38,7 +38,7 @@ $(function() {
 
   var db = {};
 
-  var ethtypes = {'2048':'IPv4', '2054':'ARP', '34525':'IPv6'};
+  var ethtypes = {'2048':'IPv4', '2054':'ARP', '34525':'IPv6', '34887':'MPLS'};
   function printEthType(k,i) { return ethtypes[k] || '0x'+(parseInt(k).toString(16)) };
 
   $('#topsources').chart({
