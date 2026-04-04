@@ -11,6 +11,6 @@ Performance metrics for IXP network.
 4. Run command: `sflow-rt/get-app.sh sflow-rt ixp-metrics`
 5. Restart sFlow-RT
 
-For more information, visit:
+For documentation, tutorials, and community support, visit:
 https://sFlow-RT.com
  
