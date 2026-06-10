@@ -82,7 +82,7 @@ function updateBogonGroups6(groups) {
 
 if(BOGONS) {
   logInfo('ixp-monitor bogon monitoring enabled');
-  let groups = storeGet('bogons');
+  var groups = storeGet('bogons');
   if(groups) setGroups('ixp_bogon',groups);
   else updateBogonGroups();
 }
@@ -499,11 +499,11 @@ setFlowHandler(function(flow) {
   switch(flow.name) {
   case 'ixp_ip4':
   case 'ixp_ip6':
-    let [mmac,asn,name] = flow.flowKeys.split(SEP);
+    var [mmac,asn,name] = flow.flowKeys.split(SEP);
     learnedMacToMember[mmac] = asn+SEP+name;
-    let macMem = macToMember[mmac];
+    var macMem = macToMember[mmac];
     if(macMem) {
-      let [mac_asn,mac_name] = macMem.split(SEP);
+      var [mac_asn,mac_name] = macMem.split(SEP);
       if(asn !== mac_asn) {
         sendWarning({ixp_evt:'assignment', mac:mmac, assigned:mac_asn, seen:asn});
       }
@@ -512,12 +512,12 @@ setFlowHandler(function(flow) {
     } 
     break;
   case 'ixp_badprotocol':
-    let [smac,ethtype] = flow.flowKeys.split(SEP);
+    var [smac,ethtype] = flow.flowKeys.split(SEP);
     sendWarning({ixp_evt:'protocol', mac:smac, ethtype:ethtype});
     break;
   case 'ixp_bgp':
   case 'ixp_bgp6':
-    let [asn1,name1,asn2,name2,addr1,addr2] = flow.flowKeys.split(SEP);
+    var [asn1,name1,asn2,name2,addr1,addr2] = flow.flowKeys.split(SEP);
     if(addr1 > addr2) {
       bgp[addr1+','+addr2] = {
         member1: {asn:asn1,name:name1,addr:addr1},
@@ -534,7 +534,7 @@ setFlowHandler(function(flow) {
     break;
   case 'ixp_bogon':
   case 'ixp_bogon6':
-    let [bogon_group,bogon_smac,bogon_sip,bogon_dmac] = flow.flowKeys.split(SEP);
+    var [bogon_group,bogon_smac,bogon_sip,bogon_dmac] = flow.flowKeys.split(SEP);
     updateBogons(flow.start,bogon_group,bogon_smac,bogon_sip,bogon_dmac);
     break;
   case 'ixp_flood_vxlan':
@@ -585,7 +585,7 @@ function prometheus() {
   var rows = activeFlows('TOPOLOGY','ixp_pair',MAX_MEMBERS,MIN_VAL,'edge') || [];
   if(prometheus_type && rows.length) result += '# TYPE '+prometheus_prefix+'peering_bps gauge\n';
   rows.forEach(function(row) {
-    let [src_asn,src_name,dst_asn,dst_name] = row.key.split(SEP);
+    var [src_asn,src_name,dst_asn,dst_name] = row.key.split(SEP);
     src_name = prometheusName(src_name);
     dst_name = prometheusName(dst_name);
     result += prometheus_prefix+'peering_bps{src_asn="'+src_asn+'",src_name="'+src_name+'",dst_asn="'+dst_asn+'",dst_name="'+dst_name+'"} '+(row.value*8)+'\n';
@@ -626,7 +626,7 @@ function memberLocations(find_mac,find_asn,find_name) {
       entry['vlan'] = loc.vlan || '';
       if(loc.agg_attachedaggid) {
         // this is a member of a LAG, report LAG port
-        let agg_port = topologyInterfacetoPort(loc.agent,loc.agg_attachedaggid);
+        var agg_port = topologyInterfacetoPort(loc.agent,loc.agg_attachedaggid);
         entry['node'] = (agg_port && agg_port.node) || log.agent;
         entry['port'] = (agg_port && agg_port.port) || loc.agg_attachedaggid;
         entry['speed'] = metric(loc.agent,loc.agg_attachedaggid+'.ifspeed')[0].metricValue || 0;
@@ -657,7 +657,7 @@ function bogonTraffic(find_mac,find_asn,find_name) {
     var rec = {lastUpdate:val.lastUpdate,mac:mac,examples:val.examples};
     var  member = macToMember[mac] || learnedMacToMember[mac];
     if(member) {
-      let [asn,name] = member.split(SEP);
+      var [asn,name] = member.split(SEP);
       rec['asn'] = asn;
       rec['name'] = name;
     }
@@ -696,7 +696,7 @@ setHttpHandler(function(req) {
       result = [];
       rows = activeFlows('TOPOLOGY','ixp_pair',MAX_MEMBERS,MIN_VAL,'edge') || [];
       rows.forEach(function(row) {
-        let [src_asn,src_name,dst_asn,dst_name] = row.key.split(SEP);
+        var [src_asn,src_name,dst_asn,dst_name] = row.key.split(SEP);
         result.push({src_asn:src_asn,src_name:src_name,dst_asn:dst_asn,dst_name:dst_name,bps:row.value*8});
       });
       break;
@@ -710,7 +710,7 @@ setHttpHandler(function(req) {
        result = [];
        rows = activeFlows('TOPOLOGY','ixp_arp',100,MIN_VAL,'edge') || [];
        rows.forEach(function(row) {
-         let [macsource,macdestination,arpoperation,arpipsender,arpiptarget] = row.key.split(SEP);
+         var [macsource,macdestination,arpoperation,arpipsender,arpiptarget] = row.key.split(SEP);
          result.push({smac:macsource,dmac:macdestination,op:arpoperation,sender:arpipsender,target:arpiptarget,fps:row.value});
        });
        break;
@@ -718,7 +718,7 @@ setHttpHandler(function(req) {
        result = [];
        rows = activeFlows('TOPOLOGY','ixp_nunicast',100,MIN_VAL,'edge') || [];
        rows.forEach(function(row) {
-         let [macsource,macdestination,ethernetprotocol] = row.key.split(SEP);
+         var [macsource,macdestination,ethernetprotocol] = row.key.split(SEP);
          result.push({smac:macsource,dmac:macdestination,ethtype:ethernetprotocol,fps:row.value});
        });
        break;
@@ -729,7 +729,7 @@ setHttpHandler(function(req) {
        rows.sort((r1,r2) => r2.value - r1.value);
        rows.length = Math.min(rows.length,100);
        rows.forEach(function(row) {
-         let macdestination = row.key;
+         var macdestination = row.key;
          result.push({dmac:macdestination,fps:row.value});
        });
        break; 
